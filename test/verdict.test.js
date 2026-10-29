@@ -167,6 +167,7 @@ test('joinNames', () => {
 
 test('renderBrief', () => {
   const store = {
+    historyFor: (id) => (id === 'g' ? [{ state: 'degraded', at: '2026-10-28T18:00:00Z' }] : []),
     list: (col) =>
       ({
         services: [svc('g', 'Google'), svc('v', 'VPN', 'internal')],
@@ -176,6 +177,7 @@ test('renderBrief', () => {
   };
   const poller = { statuses: new Map([['g', { ...status('degraded', 'Elevated error rates'), incidents: [{ title: 'Gmail delays', url: 'https://g/1' }] }], ['v', status('operational')]]) };
   const snap = buildSnapshot({ store, poller, config: { siteName: 'Status', orgName: 'IT', pollIntervalSeconds: 60 }, now });
+  assert.equal(snap.services.find((s) => s.id === 'g').timeline.slots.at(-1), 'degraded');
   const text = renderBrief(snap);
   assert.match(text, /It's them\./);
   assert.match(text, /⚠️ Google — Degraded performance — Elevated error rates/);

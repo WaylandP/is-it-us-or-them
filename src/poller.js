@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { getProvider } from './providers/index.js';
 import { isState } from './states.js';
 import { describeError } from './providers/util.js';
@@ -6,8 +7,10 @@ import { describeError } from './providers/util.js';
  * Polls every enabled service on an interval and keeps the latest normalized
  * status in memory. Statuses are not persisted: a restart simply re-polls.
  */
-export class Poller {
+export class Poller extends EventEmitter {
   constructor(store, { intervalSeconds = 60, timeoutMs = 10000, log = console } = {}) {
+    super();
+    this.setMaxListeners(0);
     this.store = store;
     this.intervalMs = intervalSeconds * 1000;
     this.timeoutMs = timeoutMs;
@@ -43,6 +46,7 @@ export class Poller {
     // Drop statuses for services that no longer exist.
     const ids = new Set(this.store.list('services').map((s) => s.id));
     for (const id of this.statuses.keys()) if (!ids.has(id)) this.statuses.delete(id);
+    this.emit('poll');
   }
 
   /** Run a provider check for a service object (saved or not) without storing it. */
@@ -82,11 +86,15 @@ export class Poller {
         lastKnown: prev?.error ? prev.lastKnown : prev ? { state: prev.state, checkedAt: prev.checkedAt } : null,
       };
     }
-    next.since = prev && prev.state === next.state ? prev.since : next.checkedAt;
     if (prev && prev.state !== next.state) {
       this.log.info?.(`[poll] ${service.name}: ${prev.state} -> ${next.state}`);
     }
+    // History collapses repeated states, so this is a no-op unless the state changed
+    // (or this is the first observation since the process started).
+    const entry = this.store.appendHistory(service.id, next.state, next.checkedAt);
+    next.since = entry?.at || next.checkedAt;
     this.statuses.set(service.id, next);
+    if (!prev || prev.state !== next.state) this.emit('poll');
     return next;
   }
 }

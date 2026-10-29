@@ -30,6 +30,7 @@ export function parseFeedItems(xml) {
 
 export default {
   id: 'rss',
+  short: 'RSS / Atom',
   label: 'RSS / Atom feed',
   description:
     'For vendors that only publish an RSS or Atom status feed. Any item published within the window is shown as an active incident and marks the service degraded. Heuristic, but better than nothing.',

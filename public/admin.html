@@ -4,70 +4,98 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin · Is it us or them?</title>
-  <link rel="stylesheet" href="/css/style.css">
   <meta name="robots" content="noindex">
+  <script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <div class="wrap">
-    <header class="site">
-      <a class="brand" href="/">← Status page</a>
-      <nav><span class="muted">Admin</span><a href="#" id="signout" hidden>Sign out</a></nav>
-    </header>
+  <div class="gate" id="gate">
+    <form class="card" id="gate-form">
+      <a class="brand" href="/" style="margin-bottom:1rem"><span class="brand-mark">?</span><span>Is it us or them?</span></a>
+      <h1>Admin sign-in</h1>
+      <p class="muted small" style="margin-bottom:1rem">Enter the <code>ADMIN_TOKEN</code> configured for this server. If none was set, the token is printed in the server log at startup.</p>
+      <label>Admin token <input type="password" id="token" autocomplete="current-password" required autofocus></label>
+      <div class="actions"><button class="btn primary" type="submit">Continue</button><span id="gate-error" class="form-error"></span></div>
+    </form>
+  </div>
 
-    <main>
-      <section id="gate" class="card" style="margin-top:1.5rem; max-width:480px">
-        <h2 style="margin-top:0">Admin token</h2>
-        <p class="muted small">Enter the <code>ADMIN_TOKEN</code> configured for this server. If none was set, the token is printed in the server log at startup.</p>
-        <form id="gate-form" class="form-grid" style="margin-top:.8rem">
-          <label class="full">Token <input type="password" id="token" autocomplete="current-password" required></label>
-          <div class="actions full"><button class="primary" type="submit">Continue</button><span id="gate-error" class="small" style="color:var(--major)"></span></div>
-        </form>
+  <div class="admin-shell" id="admin" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="/"><span class="brand-mark">?</span><span>Status page</span></a>
+      <nav aria-label="Admin sections">
+        <button data-tab="overview" class="active"><span class="i" data-icon="grid"></span>Overview</button>
+        <button data-tab="services"><span class="i" data-icon="list"></span>Services <span class="n" id="n-services"></span></button>
+        <button data-tab="maintenance"><span class="i" data-icon="calendar"></span>Maintenance <span class="n" id="n-maintenance"></span></button>
+        <button data-tab="posts"><span class="i" data-icon="megaphone"></span>Posts <span class="n" id="n-posts"></span></button>
+      </nav>
+      <div class="sidebar-foot"><button class="btn ghost sm" id="theme" title="Switch theme">Theme</button><a href="#" id="signout">Sign out</a></div>
+    </aside>
+
+    <main class="admin-main">
+      <section class="tabpane active" id="tab-overview">
+        <div class="page-head">
+          <div><h1 id="ov-headline">Overview</h1><p id="ov-detail"></p></div>
+          <div class="actions"><a class="btn" href="/" target="_blank" rel="noopener">Open status page</a></div>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="quick">
+          <button id="q-incident"><b>Post an incident</b><span>Something on our side is broken. Marks affected services as “us”.</span></button>
+          <button id="q-announce"><b>Post an announcement</b><span>Informational. Shows under “From IT”.</span></button>
+          <button id="q-maint"><b>Schedule maintenance</b><span>Listed two weeks ahead; flips services to “under maintenance” while active.</span></button>
+          <button id="q-service"><b>Track a new service</b><span>Vendor feed, HTTP check, or a manually set status.</span></button>
+        </div>
+        <div class="section-head"><h2 style="font-size:1.05rem">Needs attention</h2></div>
+        <div class="attention" id="attention"></div>
       </section>
 
-      <section id="admin" hidden>
-        <div class="tabs" role="tablist">
-          <button class="active" data-tab="services">Services</button>
-          <button data-tab="maintenance">Maintenance</button>
-          <button data-tab="posts">Announcements</button>
+      <section class="tabpane" id="tab-services">
+        <div class="page-head">
+          <div><h1>Services</h1><p>Everything the status page tracks. Drag the handle to reorder. Internal services count as “us”, vendors as “them”.</p></div>
+          <div class="actions"><button class="btn primary" id="add-service">+ Add service</button></div>
         </div>
+        <div class="card table-wrap"><table id="services-table">
+          <colgroup><col style="width:36px"><col style="width:30%"><col style="width:104px"><col><col style="width:64px"><col style="width:150px"></colgroup>
+          <thead><tr><th></th><th>Service</th><th>Owner</th><th>Status</th><th>On</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </section>
 
-        <div class="tabpane active" id="tab-services">
-          <div class="actions" style="margin:0 0 1rem; justify-content:space-between">
-            <p class="muted small" style="margin:0">Each service is read from a feed provider. Add the vendors and internal systems people actually ask about.</p>
-            <button class="primary" id="add-service">+ Add service</button>
-          </div>
-          <div class="card table-wrap"><table id="services-table"><thead><tr><th>Order</th><th>Name</th><th>Provider</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <section class="tabpane" id="tab-maintenance">
+        <div class="page-head">
+          <div><h1>Maintenance</h1><p>Scheduled windows appear on the status page two weeks ahead and mark affected services as “under maintenance” while active.</p></div>
+          <div class="actions"><button class="btn primary" id="add-maintenance">+ Schedule maintenance</button></div>
         </div>
+        <div class="card table-wrap"><table id="maintenance-table">
+          <colgroup><col style="width:220px"><col><col style="width:120px"><col style="width:210px"></colgroup>
+          <thead><tr><th>When</th><th>Maintenance</th><th>Status</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </section>
 
-        <div class="tabpane" id="tab-maintenance">
-          <div class="actions" style="margin:0 0 1rem; justify-content:space-between">
-            <p class="muted small" style="margin:0">Scheduled windows appear on the status page two weeks ahead and mark affected services as "under maintenance" while active.</p>
-            <button class="primary" id="add-maintenance">+ Schedule maintenance</button>
-          </div>
-          <div class="card table-wrap"><table id="maintenance-table"><thead><tr><th>When</th><th>Title</th><th>Services</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <section class="tabpane" id="tab-posts">
+        <div class="page-head">
+          <div><h1>Posts</h1><p>Announcements are informational. Incidents (warning / critical) mark affected services as having an internal problem until resolved.</p></div>
+          <div class="actions"><button class="btn primary" id="add-post">+ New post</button></div>
         </div>
-
-        <div class="tabpane" id="tab-posts">
-          <div class="actions" style="margin:0 0 1rem; justify-content:space-between">
-            <p class="muted small" style="margin:0">Announcements are plain updates. Incidents (warning / critical) mark affected services as having an internal problem until resolved.</p>
-            <button class="primary" id="add-post">+ New post</button>
-          </div>
-          <div class="card table-wrap"><table id="posts-table"><thead><tr><th>Type</th><th>Title</th><th>Services</th><th>Posted</th><th></th></tr></thead><tbody></tbody></table></div>
-        </div>
+        <div class="card table-wrap"><table id="posts-table">
+          <colgroup><col style="width:190px"><col><col style="width:300px"></colgroup>
+          <thead><tr><th>Type</th><th>Post</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
       </section>
     </main>
   </div>
 
   <dialog id="dialog">
     <form id="dialog-form" method="dialog">
-      <h2 id="dialog-title" style="margin-top:0"></h2>
+      <h2 id="dialog-title"></h2>
       <div id="dialog-body"></div>
-      <div id="dialog-result"></div>
+      <div id="dialog-result" style="margin-top:0.9rem"></div>
       <div class="actions">
-        <button class="primary" type="submit" id="dialog-save">Save</button>
-        <button type="button" id="dialog-test" hidden>Test feed</button>
-        <button type="button" id="dialog-cancel">Cancel</button>
-        <span id="dialog-error" class="small" style="color:var(--major)"></span>
+        <button class="btn primary" type="submit" id="dialog-save">Save</button>
+        <button class="btn" type="button" id="dialog-test" hidden>Test feed</button>
+        <button class="btn ghost" type="button" id="dialog-cancel">Cancel</button>
+        <span id="dialog-error" class="form-error"></span>
       </div>
     </form>
   </dialog>

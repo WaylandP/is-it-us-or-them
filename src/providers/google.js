@@ -12,6 +12,7 @@ const IMPACT_LABEL = { SERVICE_OUTAGE: 'critical', SERVICE_DISRUPTION: 'minor', 
 
 export default {
   id: 'google',
+  short: 'Google',
   label: 'Google Workspace / Google Cloud status dashboard',
   description:
     'Reads the incidents.json feed behind the Google Workspace Status Dashboard (or Google Cloud’s, same format). Optionally filter to the products you care about.',

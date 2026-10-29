@@ -22,23 +22,43 @@ announcements, and scheduled maintenance windows, all on one page.
 
 Zero build step, one runtime dependency (Express), data in a single JSON file.
 
-![Status page showing the verdict banner, service cards, incidents, maintenance and announcements](docs/screenshot.png)
+![Status page: verdict banner, Us and Them columns with 24-hour history bars, incidents, maintenance and announcements](docs/screenshot.png)
 
 ## Features
 
-- **Verdict banner**: "It's us" / "It's them" / "It's both" / "All clear",
-  computed from feeds plus your own maintenance and incident posts.
-- **Track whatever you want**: add and remove services from the admin page.
-  Six feed providers cover most vendors and internal systems (see below).
+- **Verdict banner**: "It's us." / "It's them." / "It's both." / "All clear.",
+  computed from vendor feeds plus your own maintenance and incident posts.
+  The whole header changes colour with the overall state.
+- **Us | Them columns**: internal systems on the left, vendors on the right,
+  each with its own tally. A vendor service that is broken because of
+  something *you* did is flagged "our incident" and counted as "us".
+- **"Is ___ down?"**: type a name into the header to get a one-line answer
+  ("Zoom: partial outage for 2 h 10 min. That's them, not us."). Press `/`
+  to focus it; the query is kept in the URL so links can be shared.
+- **24-hour history bars** per service, with an expandable detail panel:
+  how long the current state has lasted, availability over the last day,
+  vendor incidents and scheduled maintenance, and a link to the vendor page.
+- **Track whatever you want**: add, edit, test, reorder (drag or arrow keys),
+  disable and remove services from the admin page. Six feed providers cover
+  most vendors and internal systems (see below).
 - **Maintenance calendar**: scheduled windows show up two weeks ahead and
   automatically flip affected services to "under maintenance" while active.
 - **IT comms**: announcements, incident posts with timeline updates, pinning,
   and resolution. An open incident post on a service marks it as "us", even
   if the vendor says everything is fine.
-- **Chat-friendly**: `GET /api/status.txt` is a plain-text brief for pasting
-  into Slack or Teams, and a Slack slash command endpoint is built in.
-- **Light and dark**, mobile-friendly, auto-refreshing public page.
-- **Admin API** with a bearer token, so you can script it.
+- **Live**: open pages update within a second of a poll or an admin change
+  (server-sent events, with polling as a fallback).
+- **Chat-friendly**: a "Copy summary" button and `GET /api/status.txt` give a
+  plain-text brief for pasting into Slack or Teams; a Slack slash command
+  endpoint is built in; `/badge.svg` is an embeddable status badge for wikis.
+- **Light and dark** (automatic or forced), phone-friendly, accessible.
+- **Admin overview** with counts, quick actions and a "needs attention" list;
+  **admin API** with a bearer token, so you can script it.
+
+<p align="center">
+  <img src="docs/ask.png" width="49%" alt="Asking 'is zoom down?' and the expanded Zoom detail panel">
+  <img src="docs/admin.png" width="49%" alt="Admin overview with stats, quick actions and a needs-attention list">
+</p>
 
 ## Quick start
 
@@ -63,14 +83,17 @@ cp .env.example .env     # set ADMIN_TOKEN at minimum
 docker compose up -d
 ```
 
-Data is kept in the `status-data` volume at `/data/data.json`.
+Data is kept in the `status-data` volume at `/data/data.json`. That one file
+holds the services, maintenance windows, posts and 90 days of state-change
+history (used for the history bars). Back it up like any other config file.
 
 ## Adding and removing services
 
 Go to `/admin` → **Services** → **Add service**. Pick a feed provider, fill in
 its fields, hit **Test feed** to see what it returns, then save. Every row has
-Edit / Refresh / Disable / Delete buttons. Disabled services are kept but not
-polled or shown.
+refresh, edit and delete controls, an on/off switch, and an owner toggle.
+Drag the handle (or focus it and use the arrow keys) to reorder. Disabled
+services are kept but not polled or shown.
 
 Each service has an **owner**:
 
@@ -136,12 +159,15 @@ Reads are public. Writes need `Authorization: Bearer <ADMIN_TOKEN>`.
 ```
 GET    /api/status                 everything the page shows, as JSON
 GET    /api/status.txt[?q=zoom]    plain-text brief
+GET    /api/stream                 server-sent events: a fresh snapshot on every change
+GET    /badge.svg[?label=IT]       embeddable SVG status badge
 GET    /api/providers              provider descriptors (drives the admin form)
 GET    /healthz
 
 GET    /api/services
 POST   /api/services               { name, provider, owner, group, statusPageUrl, description, order, enabled, config }
 POST   /api/services/test          same body; checks the feed without saving
+PUT    /api/services/order        { ids: [...] } in display order
 PUT    /api/services/:id           partial update
 PATCH  /api/services/:id/state     { state, message }  (manual services only)
 POST   /api/services/:id/refresh   poll now
@@ -204,7 +230,9 @@ src/
   poller.js        polls providers on an interval, keeps statuses in memory
   verdict.js       us-or-them logic
   snapshot.js      builds /api/status and the text brief
-  store.js         JSON file persistence
+  timeline.js      turns state-change history into 24h history bars
+  badge.js         the SVG status badge
+  store.js         JSON file persistence, including state-change history
   providers/       one file per feed type; add your own here
   routes/          public, services, maintenance, posts, slack
 public/            static UI (no build step)

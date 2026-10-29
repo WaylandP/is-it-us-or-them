@@ -281,6 +281,65 @@ describe('misc', () => {
     assert.equal((await fetch(`${base}/nope`)).status, 404);
   });
 
+  test('services can be reordered', async () => {
+    const a = await call('POST', '/api/services', { name: 'A', provider: 'manual', config: { state: 'operational' } });
+    const b = await call('POST', '/api/services', { name: 'B', provider: 'manual', config: { state: 'operational' } });
+    const r = await call('PUT', '/api/services/order', { ids: [b.json.id, a.json.id] });
+    assert.equal(r.status, 200);
+    const orderOf = (id) => r.json.find((s) => s.id === id).order;
+    assert.equal(orderOf(b.json.id), 0);
+    assert.equal(orderOf(a.json.id), 1);
+    assert.equal((await call('PUT', '/api/services/order', { ids: ['nope'] })).status, 400);
+    await call('DELETE', `/api/services/${a.json.id}`);
+    await call('DELETE', `/api/services/${b.json.id}`);
+  });
+
+  test('status includes a 24h timeline per service and history survives deletion cleanup', async () => {
+    const snap = (await call('GET', '/api/status')).json;
+    const zoom = snap.services[0];
+    assert.equal(zoom.timeline.slots.length, 48);
+    assert.equal(zoom.timeline.slots.at(-1), 'partial_outage');
+    assert.equal(zoom.availability24h, 0);
+    assert.ok(app.store.historyFor(zoom.id).length >= 1);
+  });
+
+  test('badge reflects the verdict', async () => {
+    const res = await fetch(`${base}/badge.svg?label=IT`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /image\/svg\+xml/);
+    const svg = await res.text();
+    assert.match(svg, /it's them/);
+    assert.match(svg, /#ea580c/);
+  });
+
+  test('event stream sends a snapshot now and again after a change', async () => {
+    const ac = new AbortController();
+    const res = await fetch(`${base}/api/stream`, { signal: ac.signal });
+    assert.match(res.headers.get('content-type'), /^text\/event-stream/);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    const next = async () => {
+      while (!/\n\n/.test(buf)) {
+        const { value, done } = await reader.read();
+        if (done) throw new Error('stream ended');
+        buf += dec.decode(value);
+      }
+      const idx = buf.indexOf('\n\n');
+      const chunk = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      const m = chunk.match(/^data: (.*)$/m);
+      return m ? JSON.parse(m[1]) : null;
+    };
+    const first = await next();
+    assert.equal(first.site.name, 'Test Status');
+    const p = await call('POST', '/api/posts', { title: 'Streamed', severity: 'info' });
+    const second = await next();
+    assert.ok(second.posts.open.some((x) => x.title === 'Streamed'));
+    ac.abort();
+    await call('DELETE', `/api/posts/${p.json.id}`);
+  });
+
   test('providers are described for the admin form', async () => {
     const r = await call('GET', '/api/providers');
     const ids = r.json.map((p) => p.id);

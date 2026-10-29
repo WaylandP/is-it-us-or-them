@@ -4,57 +4,88 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Is it us or them?</title>
+  <meta name="description" content="Internal IT status: vendor status feeds, our maintenance calendar and announcements, in one place.">
+  <script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%231f9d55'/%3E%3C/svg%3E" id="favicon">
+  <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%238b94a3'/%3E%3C/svg%3E">
 </head>
 <body>
-  <div class="wrap">
-    <header class="site">
-      <a class="brand" href="/" id="brand">Is it us or them?</a>
-      <nav>
-        <a href="/api/status.txt" title="Plain-text summary for pasting into chat">Text version</a>
-        <a href="/admin">Admin</a>
-      </nav>
-    </header>
+  <a class="skip" href="#main">Skip to content</a>
 
-    <main>
-      <section class="verdict level-unknown" id="verdict" aria-live="polite">
-        <div class="dot">…</div>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="/"><span class="brand-mark">?</span><span id="brand">Is it us or them?</span></a>
+      <div class="topbar-right">
+        <span class="live" id="live" title="Live updates"><span class="live-dot"></span><span id="live-text">Connecting…</span></span>
+        <button class="btn ghost" id="copy-brief" title="Copy a plain-text summary to paste into chat"><span id="copy-icon"></span><span class="btn-label">Copy summary</span></button>
+        <button class="btn ghost" id="theme" title="Switch theme (auto / light / dark)" aria-label="Switch theme"><span id="theme-icon"></span></button>
+        <a class="btn ghost" href="/admin">Admin</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero level-unknown" id="hero" aria-live="polite">
+    <div class="wrap">
+      <div class="hero-main">
+        <div class="hero-icon" id="hero-icon"></div>
         <div>
-          <h1>Loading…</h1>
-          <p class="detail muted">Fetching the latest status.</p>
+          <h1 id="headline">Loading…</h1>
+          <p class="hero-detail" id="detail">Fetching the latest status.</p>
         </div>
-        <div class="meta"></div>
-      </section>
+      </div>
+      <div class="hero-chips" id="chips"></div>
+      <form class="ask" id="ask" role="search" autocomplete="off">
+        <label for="q">Is</label>
+        <input id="q" type="search" placeholder="Google, Zoom, VPN…" aria-label="Service name" spellcheck="false">
+        <span>down?</span>
+        <kbd title="Press / to search">/</kbd>
+      </form>
+      <p class="ask-answer" id="ask-answer" aria-live="polite"></p>
+    </div>
+  </section>
 
-      <section id="services-section">
-        <h2>Services <span class="count" id="services-count"></span></h2>
-        <div id="services"></div>
-      </section>
+  <main class="wrap" id="main">
+    <section class="columns" aria-label="Services">
+      <div class="col" id="col-us">
+        <header class="col-head">
+          <h2>Us <small>internal systems</small></h2>
+          <span class="col-state unknown" id="col-us-state">…</span>
+        </header>
+        <div class="col-body" id="col-us-body"></div>
+      </div>
+      <div class="col" id="col-them">
+        <header class="col-head">
+          <h2>Them <small>vendors</small></h2>
+          <span class="col-state unknown" id="col-them-state">…</span>
+        </header>
+        <div class="col-body" id="col-them-body"></div>
+      </div>
+    </section>
 
-      <section id="incidents-section">
-        <h2>Active incidents <span class="count" id="incidents-count"></span></h2>
-        <div class="list" id="incidents"></div>
-      </section>
+    <section class="section" id="incidents">
+      <div class="section-head"><h2>Active incidents <span class="count" id="incidents-count"></span></h2><p>Ours and theirs, worst first</p></div>
+      <div class="stack" id="incidents-list"></div>
+    </section>
 
-      <section id="maintenance-section">
-        <h2>Maintenance <span class="count" id="maintenance-count"></span></h2>
-        <div class="list" id="maintenance"></div>
-      </section>
+    <section class="section" id="maintenance">
+      <div class="section-head"><h2>Maintenance <span class="count" id="maintenance-count"></span></h2><p>In progress and the next two weeks</p></div>
+      <div class="stack" id="maintenance-list"></div>
+    </section>
 
-      <section id="posts-section">
-        <h2 id="posts-title">From IT</h2>
-        <div class="list" id="posts"></div>
-      </section>
-    </main>
+    <section class="section" id="announcements">
+      <div class="section-head"><h2 id="posts-title">From IT</h2><p>Announcements and recently resolved</p></div>
+      <div class="stack" id="posts-list"></div>
+    </section>
 
     <footer class="site">
       <span id="footer-note"></span>
       <a href="/api/status">JSON</a>
       <a href="/api/status.txt">Text</a>
+      <a href="/badge.svg" title="Embeddable status badge"><img src="/badge.svg" alt="status badge" id="badge"></a>
       <a href="https://github.com/WaylandP/is-it-us-or-them" target="_blank" rel="noopener">Source</a>
     </footer>
-  </div>
+  </main>
+
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

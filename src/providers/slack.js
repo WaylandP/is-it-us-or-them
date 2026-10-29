@@ -13,6 +13,7 @@ const TYPE_IMPACT = { outage: 'critical', incident: 'minor', maintenance: 'maint
 
 export default {
   id: 'slack',
+  short: 'Slack',
   label: 'Slack (slack-status.com)',
   description: 'Reads Slack’s public status API. No configuration needed.',
   defaultOwner: 'vendor',

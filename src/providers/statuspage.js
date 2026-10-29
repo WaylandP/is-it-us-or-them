@@ -21,6 +21,7 @@ const IMPACT = { none: 'info', minor: 'minor', major: 'major', critical: 'critic
 
 export default {
   id: 'statuspage',
+  short: 'Statuspage.io',
   label: 'Statuspage.io (Zoom, Jamf, GitHub, Atlassian, Cloudflare, …)',
   description:
     'Any vendor page powered by Atlassian Statuspage. Enter the status page root URL; the public /api/v2/summary.json endpoint is read.',

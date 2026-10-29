@@ -2,6 +2,7 @@ import { fetchWithTimeout, result } from './util.js';
 
 export default {
   id: 'http',
+  short: 'HTTP check',
   label: 'HTTP check (ping a URL)',
   description:
     'Requests a URL and marks the service operational on a 2xx/3xx response. Good for internal apps, the VPN portal, the wiki, or anything else without a status feed.',

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getProvider } from '../providers/index.js';
 import { newId } from '../ids.js';
-import { HttpError, bad, str, bool, int, oneOf, httpUrl } from '../validate.js';
+import { HttpError, bad, str, bool, int, oneOf, httpUrl, strArray } from '../validate.js';
 import { STATES } from '../states.js';
 import { describeError } from '../providers/util.js';
 
@@ -67,6 +67,16 @@ export function serviceRoutes({ store, poller }) {
     }
   });
 
+  // Reorder: body { ids: [...] } in the desired display order. Must precede the /:id routes.
+  r.put('/api/services/order', (req, res) => {
+    const ids = strArray(req.body, 'ids', { max: 500 });
+    const known = new Set(store.list('services').map((s) => s.id));
+    const unknown = ids.filter((id) => !known.has(id));
+    if (unknown.length) throw bad(`Unknown service id(s): ${unknown.join(', ')}`);
+    store.reorder('services', ids);
+    res.json(store.list('services'));
+  });
+
   r.post('/api/services', async (req, res) => {
     const now = new Date().toISOString();
     const service = { id: newId(), ...parseService(req.body), createdAt: now, updatedAt: now };
@@ -107,6 +117,7 @@ export function serviceRoutes({ store, poller }) {
     const id = req.params.id;
     if (!store.remove('services', id)) throw new HttpError(404, 'Service not found');
     poller.forget(id);
+    store.removeHistory(id);
     // Detach from maintenance windows and posts so nothing dangles.
     for (const col of ['maintenance', 'posts']) {
       for (const item of store.list(col)) {

@@ -1,9 +1,14 @@
-import { STATE, SEVERITY_LABEL, esc, fmtDate, fmtRange, ago, pill, api, getToken } from './common.js';
+import { STATE, ICONS, SEVERITY_LABEL, esc, fmtDate, fmtRange, ago, pill, api, getToken, cycleTheme, toast } from './common.js';
 
 const $ = (id) => document.getElementById(id);
+const ISSUE = new Set(['degraded', 'partial_outage', 'major_outage']);
 let providers = [];
 let services = [];
+let maintenance = [];
+let posts = [];
 let snapshot = null;
+
+document.querySelectorAll('[data-icon]').forEach((el) => (el.innerHTML = ICONS[el.dataset.icon] || ''));
 
 // ---------------------------------------------------------------- auth gate
 async function tryToken(token) {
@@ -11,7 +16,6 @@ async function tryToken(token) {
   localStorage.setItem('adminToken', token);
   $('gate').hidden = true;
   $('admin').hidden = false;
-  $('signout').hidden = false;
   await refreshAll();
 }
 
@@ -29,19 +33,31 @@ $('signout').addEventListener('click', (e) => {
   localStorage.removeItem('adminToken');
   location.reload();
 });
+$('theme').addEventListener('click', () => toast(`Theme: ${cycleTheme()}`));
 if (getToken()) tryToken(getToken()).catch(() => localStorage.removeItem('adminToken'));
 
 // ---------------------------------------------------------------- tabs
-document.querySelectorAll('.tabs button').forEach((b) =>
-  b.addEventListener('click', () => {
-    document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('active', x === b));
-    document.querySelectorAll('.tabpane').forEach((p) => p.classList.toggle('active', p.id === `tab-${b.dataset.tab}`));
-  }),
-);
+function showTab(name) {
+  document.querySelectorAll('.sidebar nav button').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
+  document.querySelectorAll('.tabpane').forEach((p) => p.classList.toggle('active', p.id === `tab-${name}`));
+  history.replaceState(null, '', `#${name}`);
+}
+document.querySelectorAll('.sidebar nav button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+if (/^#(overview|services|maintenance|posts)$/.test(location.hash)) showTab(location.hash.slice(1));
 
 async function refreshAll() {
-  [providers, snapshot] = await Promise.all([api('/api/providers'), api('/api/status')]);
-  services = await api('/api/services');
+  [providers, snapshot, services, maintenance, posts] = await Promise.all([
+    api('/api/providers'),
+    api('/api/status'),
+    api('/api/services'),
+    api('/api/maintenance'),
+    api('/api/posts'),
+  ]);
+  $('n-services').textContent = services.length;
+  const activeMaint = snapshot.maintenance.active.length + snapshot.maintenance.upcoming.length;
+  $('n-maintenance').textContent = activeMaint || '';
+  $('n-posts').textContent = snapshot.posts.open.length || '';
+  renderOverview();
   renderServices();
   renderMaintenance();
   renderPosts();
@@ -62,6 +78,7 @@ function openDialog({ title, body, save, test, saveLabel = 'Save' }) {
   onSave = save;
   onTest = test;
   dialog.showModal();
+  dialog.querySelector('input:not([type=checkbox]), select, textarea')?.focus();
 }
 $('dialog-cancel').addEventListener('click', () => dialog.close());
 $('dialog-form').addEventListener('submit', async (e) => {
@@ -71,6 +88,7 @@ $('dialog-form').addEventListener('submit', async (e) => {
   try {
     await onSave?.(formData());
     dialog.close();
+    toast('Saved');
     await refreshAll();
   } catch (err) {
     $('dialog-error').textContent = err.message;
@@ -80,7 +98,7 @@ $('dialog-form').addEventListener('submit', async (e) => {
 });
 $('dialog-test').addEventListener('click', async () => {
   $('dialog-error').textContent = '';
-  $('dialog-result').innerHTML = '<div class="notice">Testing…</div>';
+  $('dialog-result').innerHTML = '<div class="notice">Checking the feed…</div>';
   try {
     await onTest?.(formData());
   } catch (err) {
@@ -110,13 +128,14 @@ function field(name, label, { type = 'text', value = '', placeholder = '', help 
     return `<label${cls}>${esc(label)}${helpHtml}<select name="${esc(name)}">${options.map((o) => `<option value="${esc(o.value)}" ${o.value === value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>`;
   }
   if (type === 'textarea') return `<label${cls}>${esc(label)}${helpHtml}<textarea name="${esc(name)}" placeholder="${esc(placeholder)}">${esc(value)}</textarea></label>`;
-  if (type === 'checkbox') return `<label class="inline"><input type="checkbox" name="${esc(name)}" ${value ? 'checked' : ''}> ${esc(label)}</label>`;
+  if (type === 'checkbox') return `<label class="inline${full ? ' full' : ''}"><input type="checkbox" name="${esc(name)}" ${value ? 'checked' : ''}> ${esc(label)}</label>`;
   return `<label${cls}>${esc(label)}${helpHtml}<input type="${esc(type)}" name="${esc(name)}" value="${esc(value)}" placeholder="${esc(placeholder)}" ${required ? 'required' : ''}></label>`;
 }
 
 function serviceChecks(selected = []) {
   if (!services.length) return '<span class="muted small">No services yet.</span>';
-  return `<div class="checks">${services
+  const sorted = [...services].sort((a, b) => (a.owner === b.owner ? 0 : a.owner === 'internal' ? -1 : 1) || a.name.localeCompare(b.name));
+  return `<div class="checks">${sorted
     .map((s) => `<label><input type="checkbox" name="services[]" value="${esc(s.id)}" ${selected.includes(s.id) ? 'checked' : ''}>${esc(s.name)}</label>`)
     .join('')}</div>`;
 }
@@ -128,16 +147,63 @@ const toLocalInput = (iso) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 const fromLocalInput = (v) => (v ? new Date(v).toISOString() : null);
+const confirmDelete = (what) => window.confirm(`Delete ${what}? This cannot be undone.`);
+const nameOf = (id) => services.find((s) => s.id === id)?.name || '?';
+const statusFor = (id) => snapshot?.services.find((s) => s.id === id) || null;
 
-function confirmDelete(what) {
-  return window.confirm(`Delete ${what}? This cannot be undone.`);
+// ---------------------------------------------------------------- overview
+function renderOverview() {
+  const v = snapshot.verdict;
+  $('ov-headline').textContent = v.headline;
+  $('ov-detail').textContent = v.detail;
+  const issues = snapshot.services.filter((s) => ISSUE.has(s.state));
+  const unknown = snapshot.services.filter((s) => s.state === 'unknown');
+  const openInc = snapshot.posts.open.filter((p) => p.severity !== 'info');
+  const stat = (k, v, sub, cls = '') => `<div class="card stat ${cls}"><div class="k">${k}</div><div class="v">${v}${sub ? `<small>${esc(sub)}</small>` : ''}</div></div>`;
+  $('stats').innerHTML = [
+    stat('Tracked services', services.length, `${services.filter((s) => !s.enabled).length || 'none'} disabled`),
+    stat('With issues', issues.length, issues.length ? `${v.them.length} them · ${v.us.length} us` : 'all clear', issues.length ? 'bad' : 'ok'),
+    stat('Open incident posts', openInc.length, `${snapshot.posts.open.length - openInc.length} announcements`, openInc.length ? 'warn' : ''),
+    stat('Maintenance', snapshot.maintenance.active.length, `${snapshot.maintenance.upcoming.length} upcoming`, snapshot.maintenance.active.length ? 'warn' : ''),
+    stat('Feeds unreadable', unknown.length, unknown.length ? 'check config' : 'all feeds ok', unknown.length ? 'warn' : ''),
+  ].join('');
+
+  const rows = [];
+  for (const s of issues) {
+    rows.push(`<div class="card row"><span class="dot ${esc(s.state)}"></span><span class="grow"><b>${esc(s.name)}</b> · ${esc(s.reason ? `${s.reason.kind === 'maintenance' ? 'our maintenance' : 'our incident'}: ${s.reason.title}` : s.summary)}</span><span class="tag ${s.ours ? 'us' : 'them'}">${s.ours ? 'us' : 'them'}</span>${pill(s.state)}<button class="btn sm" data-goto="services">Manage</button></div>`);
+  }
+  for (const s of unknown) {
+    rows.push(`<div class="card row"><span class="dot unknown"></span><span class="grow"><b>${esc(s.name)}</b> · feed unreadable: ${esc(s.error || 'no data yet')}</span><button class="btn sm" data-goto="services">Manage</button></div>`);
+  }
+  for (const p of openInc) {
+    rows.push(`<div class="card row"><span class="dot ${p.severity === 'critical' ? 'major_outage' : 'degraded'}"></span><span class="grow"><b>${esc(p.title)}</b> · open since ${esc(ago(p.createdAt))}${p.updates?.length ? `, last update ${esc(ago(p.updates[0].at))}` : ''}</span><button class="btn sm" data-act="update" data-id="${esc(p.id)}">Add update</button><button class="btn sm" data-act="resolve" data-id="${esc(p.id)}">Resolve</button></div>`);
+  }
+  for (const m of snapshot.maintenance.active) {
+    rows.push(`<div class="card row"><span class="dot maintenance"></span><span class="grow"><b>${esc(m.title)}</b> · in progress until ${esc(fmtDate(m.endsAt))}</span><button class="btn sm" data-act="complete" data-id="${esc(m.id)}">Mark complete</button></div>`);
+  }
+  $('attention').innerHTML = rows.join('') || '<div class="card empty">Nothing needs attention. Everything tracked is operational and nothing is open.</div>';
 }
+
+$('attention').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.goto) return showTab(btn.dataset.goto);
+  const { act, id } = btn.dataset;
+  try {
+    if (act === 'update') return updateDialog(posts.find((p) => p.id === id));
+    if (act === 'resolve') await api(`/api/posts/${id}`, { method: 'PUT', body: { resolved: true } });
+    if (act === 'complete') await api(`/api/maintenance/${id}`, { method: 'PUT', body: { status: 'completed', endsAt: new Date().toISOString() } });
+    await refreshAll();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$('q-incident').addEventListener('click', () => postDialog(null, { severity: 'warning' }));
+$('q-announce').addEventListener('click', () => postDialog(null, { severity: 'info' }));
+$('q-maint').addEventListener('click', () => maintenanceDialog(null));
+$('q-service').addEventListener('click', () => serviceDialog(null));
 
 // ---------------------------------------------------------------- services
-function statusFor(id) {
-  return snapshot?.services.find((s) => s.id === id) || null;
-}
-
 function renderServices() {
   const tbody = $('services-table').querySelector('tbody');
   const sorted = [...services].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
@@ -152,28 +218,27 @@ function renderServices() {
       const status = !s.enabled
         ? '<span class="muted small">disabled</span>'
         : st
-          ? `${pill(st.state, st.label)}<div class="small muted">${esc(st.reason ? `Our ${st.reason.kind === 'maintenance' ? 'maintenance' : 'incident'}: ${st.reason.title}` : st.error ? `Feed error: ${st.error}` : st.summary || '')}${st.checkedAt ? ` · ${esc(ago(st.checkedAt))}` : ''}</div>`
+          ? `${pill(st.state, STATE[st.state]?.short)}<span class="sub">${esc(st.reason ? `Our ${st.reason.kind === 'maintenance' ? 'maintenance' : 'incident'}: ${st.reason.title}` : st.error ? `Feed error: ${st.error}` : st.summary || '')}${st.checkedAt ? ` · ${esc(ago(st.checkedAt))}` : ''}</span>`
           : '<span class="muted small">pending</span>';
+      const sub = [prov?.short || s.provider, s.group, s.description].filter(Boolean).join(' · ');
       return `<tr class="${s.enabled ? '' : 'disabled'}" data-id="${esc(s.id)}">
-        <td>${esc(s.order ?? 0)}</td>
-        <td><strong>${esc(s.name)}</strong><div class="small muted">${esc(s.group || '')}</div></td>
-        <td class="small">${esc(prov?.label.split(' (')[0] || s.provider)}</td>
-        <td><span class="tag ${s.owner === 'internal' ? 'us' : 'them'}">${esc(s.owner)}</span></td>
+        <td><span class="handle" tabindex="0" title="Drag to reorder (or use ↑/↓ keys)" aria-label="Reorder ${esc(s.name)}">${ICONS.grip}</span></td>
+        <td><span class="name">${esc(s.name)}</span><span class="sub" title="${esc(sub)}">${esc(sub)}</span></td>
+        <td><span class="owner-seg" title="Click to switch"><button class="${s.owner === 'vendor' ? 'on vendor' : ''}" data-act="owner" data-owner="vendor">them</button><button class="${s.owner === 'internal' ? 'on internal' : ''}" data-act="owner" data-owner="internal">us</button></span></td>
         <td>${status}</td>
-        <td><div class="row-actions">
-          ${s.provider === 'manual' ? '<button class="small" data-act="state">Set state</button>' : ''}
-          <button class="small" data-act="edit">Edit</button>
-          <button class="small" data-act="refresh" ${s.enabled ? '' : 'disabled'}>Refresh</button>
-          <button class="small" data-act="toggle">${s.enabled ? 'Disable' : 'Enable'}</button>
-          <button class="small danger" data-act="delete">Delete</button>
+        <td><label class="switch" title="${s.enabled ? 'Enabled' : 'Disabled'}"><input type="checkbox" data-act="toggle" ${s.enabled ? 'checked' : ''} aria-label="Enable ${esc(s.name)}"><span></span></label></td>
+        <td><div class="btn-group">
+          ${s.provider === 'manual' ? '<button class="btn sm" data-act="state">Set state</button>' : `<button class="btn sm ghost icon" data-act="refresh" title="Poll the feed now" aria-label="Refresh ${esc(s.name)}">${ICONS.refresh}</button>`}
+          <button class="btn sm ghost" data-act="edit">Edit</button>
+          <button class="btn sm ghost icon danger" data-act="delete" title="Delete" aria-label="Delete ${esc(s.name)}">${ICONS.trash}</button>
         </div></td></tr>`;
     })
     .join('');
 }
 
 $('services-table').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button[data-act]');
-  if (!btn) return;
+  const btn = e.target.closest('[data-act]');
+  if (!btn || btn.dataset.act === 'toggle') return;
   const id = btn.closest('tr').dataset.id;
   const s = services.find((x) => x.id === id);
   try {
@@ -182,29 +247,109 @@ $('services-table').addEventListener('click', async (e) => {
         return serviceDialog(s);
       case 'state':
         return manualStateDialog(s);
+      case 'owner':
+        if (btn.dataset.owner === s.owner) return;
+        await api(`/api/services/${id}`, { method: 'PUT', body: { owner: btn.dataset.owner } });
+        break;
       case 'refresh':
         btn.disabled = true;
         await api(`/api/services/${id}/refresh`, { method: 'POST' });
-        break;
-      case 'toggle':
-        await api(`/api/services/${id}`, { method: 'PUT', body: { enabled: !s.enabled } });
+        toast(`${s.name} refreshed`);
         break;
       case 'delete':
         if (!confirmDelete(`"${s.name}"`)) return;
         await api(`/api/services/${id}`, { method: 'DELETE' });
+        toast(`${s.name} removed`);
         break;
     }
     await refreshAll();
   } catch (err) {
-    alert(err.message);
+    toast(err.message);
   }
 });
+$('services-table').addEventListener('change', async (e) => {
+  const input = e.target.closest('input[data-act=toggle]');
+  if (!input) return;
+  const id = input.closest('tr').dataset.id;
+  try {
+    await api(`/api/services/${id}`, { method: 'PUT', body: { enabled: input.checked } });
+    await refreshAll();
+  } catch (err) {
+    toast(err.message);
+    input.checked = !input.checked;
+  }
+});
+
+// Drag-and-drop (and keyboard) reordering.
+{
+  const tbody = $('services-table').querySelector('tbody');
+  let dragId = null;
+  const clear = () => tbody.querySelectorAll('tr').forEach((r) => r.classList.remove('drop-before', 'drop-after', 'dragging'));
+  const commit = async (ids) => {
+    try {
+      await api('/api/services/order', { method: 'PUT', body: { ids } });
+      await refreshAll();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  tbody.addEventListener('mousedown', (e) => {
+    const tr = e.target.closest('tr');
+    if (tr) tr.draggable = Boolean(e.target.closest('.handle'));
+  });
+  tbody.addEventListener('dragstart', (e) => {
+    const tr = e.target.closest('tr');
+    if (!tr?.draggable) return e.preventDefault();
+    dragId = tr.dataset.id;
+    tr.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragId);
+  });
+  tbody.addEventListener('dragover', (e) => {
+    if (!dragId) return;
+    e.preventDefault();
+    const tr = e.target.closest('tr');
+    if (!tr || tr.dataset.id === dragId) return;
+    const rect = tr.getBoundingClientRect();
+    tbody.querySelectorAll('tr').forEach((r) => r.classList.remove('drop-before', 'drop-after'));
+    tr.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drop-before' : 'drop-after');
+  });
+  tbody.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const target = e.target.closest('tr');
+    if (!dragId || !target || target.dataset.id === dragId) return clear();
+    const before = target.classList.contains('drop-before');
+    const ids = [...tbody.querySelectorAll('tr')].map((r) => r.dataset.id).filter((id) => id !== dragId);
+    const idx = ids.indexOf(target.dataset.id);
+    ids.splice(before ? idx : idx + 1, 0, dragId);
+    clear();
+    dragId = null;
+    await commit(ids);
+  });
+  tbody.addEventListener('dragend', () => {
+    clear();
+    dragId = null;
+  });
+  tbody.addEventListener('keydown', async (e) => {
+    if (!e.target.classList.contains('handle') || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    const tr = e.target.closest('tr');
+    const ids = [...tbody.querySelectorAll('tr')].map((r) => r.dataset.id);
+    const i = ids.indexOf(tr.dataset.id);
+    const j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    await commit(ids);
+    tbody.querySelector(`tr[data-id="${tr.dataset.id}"] .handle`)?.focus();
+  });
+}
 
 $('add-service').addEventListener('click', () => serviceDialog(null));
 
 function providerFields(provider, config = {}) {
-  return `<div class="form-grid full" id="provider-fields">
-    <p class="full muted small" style="margin:0">${esc(provider.description)}</p>
+  return `<div class="form-section" id="provider-fields">
+    <p>${esc(provider.description)}</p>
+    <div class="form-grid">
     ${provider.fields
       .map((f) =>
         field(`config.${f.key}`, f.label, {
@@ -218,6 +363,7 @@ function providerFields(provider, config = {}) {
         }),
       )
       .join('')}
+    </div>
   </div>`;
 }
 
@@ -232,15 +378,14 @@ function serviceDialog(existing) {
       type: 'select',
       value: current.owner || provider.defaultOwner,
       options: [
-        { value: 'vendor', label: 'Vendor (problems are "them")' },
-        { value: 'internal', label: 'Internal (problems are "us")' },
+        { value: 'vendor', label: 'Vendor (them)' },
+        { value: 'internal', label: 'Internal (us)' },
       ],
     })}
-    ${field('group', 'Group', { value: current.group ?? '', placeholder: 'Vendors, Internal, Collaboration…', help: 'Services are grouped under this heading.' })}
-    ${field('statusPageUrl', 'Public status page link', { type: 'url', value: current.statusPageUrl || '', placeholder: 'https://status.example.com', help: 'Shown to people as the "more info" link.' })}
-    ${field('order', 'Sort order', { type: 'number', value: current.order ?? 0 })}
-    ${field('description', 'Description', { value: current.description || '', placeholder: 'One line, optional', full: true })}
-    ${field('enabled', 'Enabled (polled and shown on the page)', { type: 'checkbox', value: current.enabled !== false })}
+    ${field('group', 'Group', { value: current.group ?? '', placeholder: 'Collaboration, Identity, Network…', help: 'Optional heading within the Us / Them column.' })}
+    ${field('statusPageUrl', 'Public status page link', { type: 'url', value: current.statusPageUrl || '', placeholder: 'https://status.example.com', help: 'Shown as the “more info” link.' })}
+    ${field('description', 'Description', { value: current.description || '', placeholder: 'One line, optional' })}
+    ${field('enabled', 'Enabled (polled and shown on the page)', { type: 'checkbox', value: current.enabled !== false, full: true })}
     ${providerFields(provider, current.config || {})}
   </div>`;
 
@@ -254,14 +399,14 @@ function serviceDialog(existing) {
       group: data.group,
       statusPageUrl: data.statusPageUrl,
       description: data.description,
-      order: Number(data.order) || 0,
       enabled: data.enabled,
       config,
+      ...(isNew ? { order: services.length } : {}),
     };
   };
 
   openDialog({
-    title: isNew ? 'Add service' : `Edit ${existing.name}`,
+    title: isNew ? 'Track a new service' : `Edit ${existing.name}`,
     body,
     saveLabel: isNew ? 'Add service' : 'Save changes',
     save: (data) => (isNew ? api('/api/services', { method: 'POST', body: parse(data) }) : api(`/api/services/${existing.id}`, { method: 'PUT', body: parse(data) })),
@@ -276,12 +421,10 @@ function serviceDialog(existing) {
     },
   });
 
-  // Swap the provider-specific fields when the provider changes.
   $('dialog-form').querySelector('[name=provider]').addEventListener('change', (e) => {
     const p = providers.find((x) => x.id === e.target.value);
     $('provider-fields').outerHTML = providerFields(p, {});
-    const owner = $('dialog-form').querySelector('[name=owner]');
-    if (isNew) owner.value = p.defaultOwner;
+    if (isNew) $('dialog-form').querySelector('[name=owner]').value = p.defaultOwner;
   });
 }
 
@@ -291,7 +434,7 @@ function manualStateDialog(s) {
     title: `Set state: ${s.name}`,
     body: `<div class="form-grid">
       ${field('state', 'State', { type: 'select', value: s.config?.state || 'operational', options: states.map((k) => ({ value: k, label: STATE[k].label })), full: true })}
-      ${field('message', 'Message shown on the page', { value: s.config?.message || '', placeholder: 'e.g. Printers on floor 3 offline, vendor on site', full: true })}
+      ${field('message', 'Message shown on the page', { value: s.config?.message || '', placeholder: 'e.g. Floor 3 printers offline, vendor on site', full: true })}
     </div>`,
     saveLabel: 'Update',
     save: (data) => api(`/api/services/${s.id}/state`, { method: 'PATCH', body: data }),
@@ -300,44 +443,47 @@ function manualStateDialog(s) {
 
 // ---------------------------------------------------------------- maintenance
 const PHASE_PILL = { active: ['maintenance', 'In progress'], upcoming: ['unknown', 'Scheduled'], completed: ['operational', 'Completed'], cancelled: ['unknown', 'Cancelled'] };
+const phaseOf = (m) => {
+  if (m.status === 'cancelled') return 'cancelled';
+  if (m.status === 'completed') return 'completed';
+  const now = Date.now();
+  const start = new Date(m.startsAt).getTime();
+  const end = m.endsAt ? new Date(m.endsAt).getTime() : start + 3600e3;
+  if (m.status === 'in_progress') return 'active';
+  return now < start ? 'upcoming' : now <= end ? 'active' : 'completed';
+};
 
-async function renderMaintenance() {
-  const items = await api('/api/maintenance');
-  const phases = new Map([...snapshot.maintenance.active, ...snapshot.maintenance.upcoming].map((m) => [m.id, m.phase]));
-  const phaseOf = (m) => phases.get(m.id) || (m.status === 'cancelled' ? 'cancelled' : m.status === 'in_progress' ? 'active' : new Date(m.startsAt) > new Date() ? 'upcoming' : 'completed');
+function renderMaintenance() {
   const tbody = $('maintenance-table').querySelector('tbody');
-  if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">No maintenance windows scheduled.</td></tr>';
+  if (!maintenance.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">No maintenance windows scheduled.</td></tr>';
     return;
   }
-  const nameOf = Object.fromEntries(services.map((s) => [s.id, s.name]));
-  tbody.innerHTML = [...items]
+  tbody.innerHTML = [...maintenance]
     .sort((a, b) => new Date(b.startsAt) - new Date(a.startsAt))
     .map((m) => {
       const ph = phaseOf(m);
       const [cls, label] = PHASE_PILL[ph];
-      return `<tr data-id="${esc(m.id)}">
-        <td class="small">${esc(fmtRange(m.startsAt, m.endsAt))}</td>
-        <td><strong>${esc(m.title)}</strong>${m.description ? `<div class="small muted">${esc(m.description.slice(0, 120))}</div>` : ''}</td>
-        <td class="small">${esc(m.services.map((id) => nameOf[id] || '?').join(', ') || '—')}</td>
+      const sub = [m.services.map(nameOf).join(', ') || 'No services attached', m.description].filter(Boolean).join(' · ');
+      return `<tr data-id="${esc(m.id)}" class="${ph === 'completed' || ph === 'cancelled' ? 'disabled' : ''}">
+        <td class="small nowrap">${esc(fmtRange(m.startsAt, m.endsAt))}</td>
+        <td><span class="name">${esc(m.title)}</span><span class="sub" title="${esc(sub)}">${esc(sub)}</span></td>
         <td>${pill(cls, label)}</td>
-        <td><div class="row-actions">
-          ${ph === 'upcoming' ? '<button class="small" data-act="start">Start now</button>' : ''}
-          ${ph === 'active' ? '<button class="small" data-act="complete">Complete</button>' : ''}
-          <button class="small" data-act="edit">Edit</button>
-          <button class="small danger" data-act="delete">Delete</button>
+        <td><div class="btn-group">
+          ${ph === 'upcoming' ? '<button class="btn sm" data-act="start">Start now</button>' : ''}
+          ${ph === 'active' ? '<button class="btn sm" data-act="complete">Complete</button>' : ''}
+          <button class="btn sm ghost" data-act="edit">Edit</button>
+          <button class="btn sm ghost icon danger" data-act="delete" title="Delete" aria-label="Delete ${esc(m.title)}">${ICONS.trash}</button>
         </div></td></tr>`;
     })
     .join('');
-  tbody.dataset.items = JSON.stringify(items);
 }
 
 $('maintenance-table').addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const id = btn.closest('tr').dataset.id;
-  const items = JSON.parse(btn.closest('tbody').dataset.items);
-  const m = items.find((x) => x.id === id);
+  const m = maintenance.find((x) => x.id === id);
   try {
     switch (btn.dataset.act) {
       case 'edit':
@@ -355,10 +501,9 @@ $('maintenance-table').addEventListener('click', async (e) => {
     }
     await refreshAll();
   } catch (err) {
-    alert(err.message);
+    toast(err.message);
   }
 });
-
 $('add-maintenance').addEventListener('click', () => maintenanceDialog(null));
 
 function maintenanceDialog(existing) {
@@ -368,7 +513,7 @@ function maintenanceDialog(existing) {
   openDialog({
     title: isNew ? 'Schedule maintenance' : 'Edit maintenance',
     body: `<div class="form-grid">
-      ${field('title', 'Title', { value: existing?.title || '', placeholder: 'e.g. VPN firmware upgrade', required: true, full: true })}
+      ${field('title', 'Title', { value: existing?.title || '', placeholder: 'e.g. VPN firewall firmware upgrade', required: true, full: true })}
       ${field('startsAt', 'Starts', { type: 'datetime-local', value: toLocalInput(start), required: true })}
       ${field('endsAt', 'Ends', { type: 'datetime-local', value: toLocalInput(end) })}
       ${field('status', 'Status', {
@@ -393,40 +538,37 @@ function maintenanceDialog(existing) {
 }
 
 // ---------------------------------------------------------------- posts
-async function renderPosts() {
-  const items = await api('/api/posts');
+function renderPosts() {
   const tbody = $('posts-table').querySelector('tbody');
-  if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">Nothing posted yet.</td></tr>';
+  if (!posts.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty">Nothing posted yet.</td></tr>';
     return;
   }
-  const nameOf = Object.fromEntries(services.map((s) => [s.id, s.name]));
-  tbody.innerHTML = [...items]
+  tbody.innerHTML = [...posts]
     .sort((a, b) => Number(a.resolved) - Number(b.resolved) || new Date(b.createdAt) - new Date(a.createdAt))
     .map(
-      (p) => `<tr data-id="${esc(p.id)}" class="${p.resolved ? 'disabled' : ''}">
-        <td>${pill(p.resolved ? 'operational' : p.severity, p.resolved ? 'Resolved' : SEVERITY_LABEL[p.severity])}${p.pinned ? ' <span class="tag">pinned</span>' : ''}</td>
-        <td><strong>${esc(p.title)}</strong>${p.body ? `<div class="small muted">${esc(p.body.slice(0, 140))}</div>` : ''}${p.updates?.length ? `<div class="small muted">${p.updates.length} update(s), latest ${esc(ago(p.updates[0].at))}</div>` : ''}</td>
-        <td class="small">${esc(p.services.map((id) => nameOf[id] || '?').join(', ') || '—')}</td>
-        <td class="small">${esc(fmtDate(p.createdAt))}</td>
-        <td><div class="row-actions">
-          <button class="small" data-act="update">Add update</button>
-          <button class="small" data-act="resolve">${p.resolved ? 'Reopen' : 'Resolve'}</button>
-          <button class="small" data-act="pin">${p.pinned ? 'Unpin' : 'Pin'}</button>
-          <button class="small" data-act="edit">Edit</button>
-          <button class="small danger" data-act="delete">Delete</button>
-        </div></td></tr>`,
+      (p) => {
+        const meta = [fmtDate(p.createdAt), p.services.map(nameOf).join(', '), p.updates?.length ? `${p.updates.length} update${p.updates.length === 1 ? '' : 's'}, latest ${ago(p.updates[0].at)}` : ''].filter(Boolean).join(' · ');
+        return `<tr data-id="${esc(p.id)}" class="${p.resolved ? 'disabled' : ''}">
+        <td>${pill(p.resolved ? 'operational' : p.severity, p.resolved ? 'Resolved' : SEVERITY_LABEL[p.severity])}${p.pinned ? '<br><span class="tag" style="margin-top:0.3rem">pinned</span>' : ''}</td>
+        <td><span class="name">${esc(p.title)}</span>${p.body ? `<span class="sub" title="${esc(p.body)}">${esc(p.body)}</span>` : ''}<span class="sub">${esc(meta)}</span></td>
+        <td><div class="btn-group">
+          ${p.resolved ? '' : '<button class="btn sm" data-act="update">Add update</button>'}
+          <button class="btn sm ghost" data-act="resolve">${p.resolved ? 'Reopen' : 'Resolve'}</button>
+          <button class="btn sm ghost" data-act="pin">${p.pinned ? 'Unpin' : 'Pin'}</button>
+          <button class="btn sm ghost" data-act="edit">Edit</button>
+          <button class="btn sm ghost icon danger" data-act="delete" title="Delete" aria-label="Delete ${esc(p.title)}">${ICONS.trash}</button>
+        </div></td></tr>`;
+      },
     )
     .join('');
-  tbody.dataset.items = JSON.stringify(items);
 }
 
 $('posts-table').addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const id = btn.closest('tr').dataset.id;
-  const items = JSON.parse(btn.closest('tbody').dataset.items);
-  const p = items.find((x) => x.id === id);
+  const p = posts.find((x) => x.id === id);
   try {
     switch (btn.dataset.act) {
       case 'edit':
@@ -446,30 +588,30 @@ $('posts-table').addEventListener('click', async (e) => {
     }
     await refreshAll();
   } catch (err) {
-    alert(err.message);
+    toast(err.message);
   }
 });
-
 $('add-post').addEventListener('click', () => postDialog(null));
 
-function postDialog(existing) {
+function postDialog(existing, defaults = {}) {
   const isNew = !existing;
+  const cur = existing || defaults;
   openDialog({
-    title: isNew ? 'New post' : 'Edit post',
+    title: isNew ? (cur.severity && cur.severity !== 'info' ? 'Post an incident' : 'New post') : 'Edit post',
     body: `<div class="form-grid">
-      ${field('title', 'Title', { value: existing?.title || '', placeholder: 'e.g. Email delivery delays', required: true, full: true })}
+      ${field('title', 'Title', { value: cur.title || '', placeholder: 'e.g. Email delivery delays', required: true, full: true })}
       ${field('severity', 'Type', {
         type: 'select',
-        value: existing?.severity || 'info',
+        value: cur.severity || 'info',
         options: [
-          { value: 'info', label: 'Announcement (informational)' },
-          { value: 'warning', label: 'Incident (degraded) — marks services as "us"' },
-          { value: 'critical', label: 'Major incident (outage) — marks services as "us"' },
+          { value: 'info', label: 'Announcement — informational' },
+          { value: 'warning', label: 'Incident — degraded, marks services as “us”' },
+          { value: 'critical', label: 'Major incident — outage, marks services as “us”' },
         ],
       })}
-      ${field('pinned', 'Pin to the top', { type: 'checkbox', value: existing?.pinned || false })}
-      <label class="full">Affected services ${serviceChecks(existing?.services || [])}</label>
-      ${field('body', 'Message', { type: 'textarea', value: existing?.body || '', placeholder: 'What people need to know. URLs become links.', full: true })}
+      ${field('pinned', 'Pin to the top', { type: 'checkbox', value: cur.pinned || false })}
+      <label class="full">Affected services ${serviceChecks(cur.services || [])}</label>
+      ${field('body', 'Message', { type: 'textarea', value: cur.body || '', placeholder: 'What people need to know. URLs become links.', full: true })}
     </div>`,
     saveLabel: isNew ? 'Post' : 'Save changes',
     save: (data) => {
@@ -484,7 +626,7 @@ function updateDialog(p) {
     title: `Update: ${p.title}`,
     body: `<div class="form-grid">
       ${field('body', 'Update', { type: 'textarea', value: '', placeholder: 'e.g. Vendor has identified the cause; fix rolling out.', full: true })}
-      ${field('resolved', 'This update resolves the post', { type: 'checkbox', value: false })}
+      ${field('resolved', 'This update resolves the post', { type: 'checkbox', value: false, full: true })}
     </div>`,
     saveLabel: 'Post update',
     save: (data) => api(`/api/posts/${p.id}/updates`, { method: 'POST', body: data }),

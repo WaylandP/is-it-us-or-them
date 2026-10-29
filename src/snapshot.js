@@ -1,4 +1,5 @@
 import { computeVerdict, maintenancePhase } from './verdict.js';
+import { buildTimeline, availability } from './timeline.js';
 
 const UPCOMING_DAYS = 14;
 
@@ -28,6 +29,11 @@ export function buildSnapshot({ store, poller, config, now = new Date() }) {
     .map(withNames)
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
 
+  const services24h = verdict.services.map((s) => {
+    const timeline = buildTimeline(store.historyFor(s.id), now, { hours: 24, slots: 48 });
+    return { ...s, timeline, availability24h: availability(timeline) };
+  });
+
   return {
     generatedAt: now.toISOString(),
     site: { name: config.siteName, org: config.orgName, pollIntervalSeconds: config.pollIntervalSeconds },
@@ -40,7 +46,7 @@ export function buildSnapshot({ store, poller, config, now = new Date() }) {
       us: verdict.us,
       counts: verdict.counts,
     },
-    services: verdict.services,
+    services: services24h,
     incidents: vendorIncidents,
     maintenance: {
       active: maint.filter((m) => m.phase === 'active').sort(byStart),

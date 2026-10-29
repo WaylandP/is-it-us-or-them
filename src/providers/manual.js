@@ -3,6 +3,7 @@ import { STATES, STATE_LABELS } from '../states.js';
 
 export default {
   id: 'manual',
+  short: 'Manual',
   label: 'Manual (set the status yourself)',
   description:
     'No feed. The IT team sets the state by hand, from the admin page or the API. Useful for printers, Wi-Fi, badge readers, phones, and other things nothing monitors for you.',
