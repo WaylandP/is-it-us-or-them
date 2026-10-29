@@ -1,0 +1,36 @@
+{
+  "page": { "id": "14qjgk812kgk", "name": "Zoom", "url": "https://status.zoom.us", "updated_at": "2026-10-28T20:00:00Z" },
+  "components": [
+    { "id": "c1", "name": "Zoom Meetings", "status": "operational", "group_id": null },
+    { "id": "c2", "name": "Zoom Phone", "status": "partial_outage", "group_id": null },
+    { "id": "c3", "name": "Zoom Webinars", "status": "operational", "group_id": null }
+  ],
+  "incidents": [
+    {
+      "id": "inc1",
+      "name": "Zoom Phone call quality degraded in EMEA",
+      "status": "identified",
+      "impact": "major",
+      "shortlink": "https://stspg.io/abc123",
+      "created_at": "2026-10-28T18:30:00Z",
+      "updated_at": "2026-10-28T19:45:00Z",
+      "components": [{ "id": "c2", "name": "Zoom Phone" }],
+      "incident_updates": [
+        { "status": "identified", "body": "We have identified the cause and are rolling out a fix.", "created_at": "2026-10-28T19:45:00Z" },
+        { "status": "investigating", "body": "We are investigating.", "created_at": "2026-10-28T18:30:00Z" }
+      ]
+    }
+  ],
+  "scheduled_maintenances": [
+    {
+      "id": "m1",
+      "name": "Datacenter network upgrade",
+      "status": "scheduled",
+      "shortlink": "https://stspg.io/m1",
+      "scheduled_for": "2026-11-02T02:00:00Z",
+      "scheduled_until": "2026-11-02T06:00:00Z",
+      "components": [{ "id": "c1", "name": "Zoom Meetings" }]
+    }
+  ],
+  "status": { "indicator": "major", "description": "Partial System Outage" }
+}

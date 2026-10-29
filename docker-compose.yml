@@ -1,0 +1,20 @@
+services:
+  status:
+    build: .
+    image: is-it-us-or-them
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}
+      SITE_NAME: ${SITE_NAME:-Is it us or them?}
+      ORG_NAME: ${ORG_NAME:-IT}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      # Uncomment if your network needs an egress proxy:
+      # HTTPS_PROXY: http://proxy.corp.example:3128
+    volumes:
+      - status-data:/data
+
+volumes:
+  status-data:
