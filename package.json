@@ -22,5 +22,11 @@
   "license": "MIT",
   "dependencies": {
     "express": "^5.1.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WaylandP/is-it-us-or-them.git"
+  },
+  "bugs": "https://github.com/WaylandP/is-it-us-or-them/issues",
+  "homepage": "https://github.com/WaylandP/is-it-us-or-them#readme"
 }

@@ -1,5 +1,9 @@
 # Is it us or them?
 
+[![CI](https://github.com/WaylandP/is-it-us-or-them/actions/workflows/ci.yml/badge.svg)](https://github.com/WaylandP/is-it-us-or-them/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node 20+](https://img.shields.io/badge/node-%3E%3D20.10-brightgreen.svg)](package.json)
+
 An internal IT status page that answers the question before anyone asks it.
 
 It combines **vendor status feeds** (Google Workspace, Slack, Zoom, Jamf, and
@@ -223,6 +227,13 @@ It is not suited to serverless platforms. Put it behind your SSO proxy or
 VPN if the page itself should be internal-only; the admin token only
 protects writes.
 
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and the
+provider contract, and [SECURITY.md](SECURITY.md) for deployment guidance and
+how to report a vulnerability. Changes are tracked in
+[CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
-MIT
+[MIT](LICENSE)
