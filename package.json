@@ -1,0 +1,32 @@
+{
+  "name": "is-it-us-or-them",
+  "version": "0.1.0",
+  "description": "Internal IT status page that combines vendor status feeds (Google, Slack, Zoom, Jamf, ...) with your own maintenance calendar and IT announcements.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20.10"
+  },
+  "keywords": [
+    "status-page",
+    "it",
+    "statuspage",
+    "incident",
+    "maintenance"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WaylandP/is-it-us-or-them.git"
+  },
+  "bugs": "https://github.com/WaylandP/is-it-us-or-them/issues",
+  "homepage": "https://github.com/WaylandP/is-it-us-or-them#readme"
+}
