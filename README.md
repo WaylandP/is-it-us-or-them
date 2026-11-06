@@ -165,4 +165,12 @@ Read [Architecture](docs/ARCHITECTURE.md), [Deployment](docs/DEPLOYMENT.md), [re
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for provider and test guidance. For vulnerabilities, follow [SECURITY.md](SECURITY.md), **not** a public bug report.
 
+## Contributors and AI assistance
+
+Created and maintained by [Wayland Pearce (@WaylandP)](https://github.com/WaylandP), with contributions recorded in the repository's Git history.
+
+**ChatGPT (OpenAI)** has contributed AI-assisted research, implementation, regression tests, security hardening, monitoring-freshness improvements, and documentation under the maintainer's direction. Earlier contributor credits remain preserved in Git history.
+
+AI assistance is acknowledged transparently; project decisions, review, and releases remain the responsibility of the human maintainers. This acknowledgment does not imply sponsorship or endorsement by OpenAI.
+
 Licensed under the [MIT License](LICENSE). No subscription and no mandatory telemetry.
