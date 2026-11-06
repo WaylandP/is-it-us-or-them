@@ -2,8 +2,6 @@ FROM node:22-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production
-# Honour HTTPS_PROXY/NO_PROXY if the host network needs an egress proxy.
-ENV NODE_USE_ENV_PROXY=1
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev

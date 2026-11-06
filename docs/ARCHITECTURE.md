@@ -1,55 +1,43 @@
 # Architecture and data flow
 
-The goal is a lightweight, inspectable, self-hosted application that answers whether a service disruption belongs to the internal IT team, an external provider, or both.
+A single Node/Express process combines provider observations with IT-declared incidents and maintenance. The frontend is static HTML/CSS/JavaScript; there is no build step or external database.
 
-## Request flow
+## Flow
 
-1. `src/server.js` creates the Express app in `src/app.js`, starts the poller and listens on the configured port.
-2. `src/store.js` loads services, maintenance and posts from a single JSON file. Writes use a temporary file and rename.
-3. `src/poller.js` periodically runs enabled provider checks from `src/providers/`. Status results are kept **in memory**, not persisted.
-4. `src/verdict.js` combines the latest results with unresolved IT incident posts and active maintenance windows.
-5. `src/snapshot.js` builds `GET /api/status` and the plain-text summary.
-6. The static dashboard in `public/` requests the snapshot and refreshes periodically.
+1. src/server.js creates the app and starts the poller. Startup validates operator network policy and freshness configuration.
+2. src/store.js loads services, maintenance and posts from data.json; writes use a temporary file and rename.
+3. src/poller.js runs enabled providers. All built-in network providers use src/providers/util.js, backed by src/check-network.js.
+4. The transport validates destinations and DNS results, pins the actual connection, rechecks redirects and bounds time/body size. See [research and threat model](MONITORING_SECURITY.md).
+5. Successful check completion records checkedAt and lastSuccessfulAt. Failed attempts cannot refresh the last successful observation. Results remain in RAM.
+6. src/freshness.js derives observation age on every snapshot read. GeneratedAt is only snapshot creation time, never a substitute for checkedAt.
+7. src/verdict.js combines current evidence with IT posts/maintenance. src/snapshot.js produces JSON and text; Slack uses the same text renderer.
+8. The browser polls status and independently expires cached snapshots using elapsed time. Failed requests remain unverified across redraws until a new successful response.
 
-```text
-Statuspage / Slack / Google / RSS / HTTP / Manual
-                      |
-                provider adapters
-                      |
-                  poller (RAM)         data.json
-                      |                  |
-                      +---- verdict -----+
-                              |
-                           snapshot
-                              |
-                   public dashboard / API
-```
+## Status semantics
+
+Each service exposes freshness (fresh, pending, failed, unknown, stale or invalid), ageSeconds, expiresAt, checkedAt, lastSuccessfulAt and lastKnown when applicable. Effective feed state becomes unknown when the observation is not fresh. Old incidents are not listed as current confirmed incidents; last-known status remains historical context.
+
+The default threshold is max(60 seconds, three polling intervals, twice the timeout rounded to seconds). STATUS_STALE_AFTER_SECONDS can override it within the validated limits.
+
+Internal and external evidence are independent. A current vendor incident and internal maintenance on the same service produce Both, rather than allowing maintenance to hide the outage. Display severity reflects the worst current signal. Untargeted critical IT posts contribute aggregate severity. Monitoring gaps remain counted even when an internal declaration establishes an issue.
+
+Manual checks read a declared state; they do not independently verify equipment. RSS uses a recent-item heuristic. Freshness enforcement does not remove these provider-specific limitations.
+
+## Concurrency
+
+Polls are deduplicated for an unchanged configuration. A changed configuration invalidates old results. A result publishes only if its generation and configuration still match an enabled existing service. Delete, disable and shutdown invalidate pending publications. This prevents late successful requests from resurrecting obsolete health.
 
 ## Trust boundaries
 
-- **Public:** the dashboard, status snapshot, provider descriptions, service configuration reads, maintenance and posts. Anyone who can reach the service can read these endpoints.
-- **Admin:** POST, PUT, PATCH and DELETE API operations use `ADMIN_TOKEN`. The admin UI stores this token in browser local storage.
-- **Slack:** `POST /slack/command` validates request signatures only when `SLACK_SIGNING_SECRET` is configured.
-- **Outbound networking:** admins configure URLs read by the server. `fetch` follows redirects; restricting outbound destinations remains a security concern.
-- **Persistence:** `data.json` contains configuration and communications in plain text. Back it up and protect the volume.
+- Public: status snapshot, text, posts, maintenance and provider descriptors. These can still contain internal operational information.
+- Admin: service configuration GET/HEAD plus API writes require ADMIN_TOKEN. The existing UI still stores its token in local storage.
+- Outbound policy: exact-origin/CIDR approvals are deployment environment settings, not an admin API bypass. Public allowed addresses remain reachable on ports 80/443 unless external egress policy restricts them further.
+- Slack: signatures are verified only when its signing secret is configured.
+- Browser: response headers restrict scripts, embedding and referrers; untrusted provider href values are scheme-validated.
+- Storage: configuration and communications are plaintext; protect the volume and backups.
 
-Do not assume that public endpoint data is automatically safe for external audiences. This application has no built-in per-role filtering.
+## Provider contract and limits
 
-## Verdict precedence
+Providers export id, label, description, defaultOwner, fields and async check(service, ctx), returning state, summary, incidents and maintenances. Use the shared transport; do not introduce direct global fetch calls or test-mode network bypasses. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-A service's displayed state is determined, in order, by:
-1. An unresolved, warning/critical IT incident post for that service.
-2. An active IT maintenance window for that service.
-3. The most recent provider result.
-
-Ownership matters: provider-reported problems on internal services count as **us**, while problems on vendor services count as **them**, unless overridden by an IT incident or maintenance. Untargeted IT incidents or maintenance can also contribute to **us**. Both can coexist.
-
-When no classified issue exists, unknown feeds produce **Status uncertain**, not **All clear**. Vendor maintenance without an outage produces **Maintenance reported**. Only successfully reported operational statuses qualify for **All Clear**. The current system does **not** yet implement an age-based stale-data timeout.
-
-## Provider contract
-
-A provider exports `id`, `label`, `description`, `defaultOwner`, `fields` and an asynchronous `check(service, ctx)` returning normalized `state`, `summary`, `incidents` and `maintenances` values. Register it in `src/providers/index.js`. See [CONTRIBUTING.md](../CONTRIBUTING.md) for examples and test expectations.
-
-## Scaling boundaries
-
-The design is intentionally **single-process, single-writer**. There is no distributed queue, shared cache, database, tenant isolation or historical uptime store. Do not add multiple replicas or serverless hosting without first addressing shared state, concurrent writes, scheduling, and durability.
+The design remains single-process/single-writer: no shared database, tenant isolation, distributed scheduler or historical uptime store. No runtime dependency was added for monitoring hardening.
