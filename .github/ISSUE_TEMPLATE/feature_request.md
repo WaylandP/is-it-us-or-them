@@ -1,15 +1,19 @@
 ---
 name: Feature request
-about: Suggest an improvement
-title: ''
+about: Suggest an IT operations improvement
+title: ""
 labels: enhancement
-assignees: ''
+assignees: ""
 ---
 
-## The problem
+## IT problem to solve
 
-<!-- What are you trying to do that is hard or impossible today? -->
+<!-- What does a helpdesk, sysadmin or employee need to do? -->
 
-## Proposed solution
+## Suggested behavior
 
-## Alternatives you considered
+## Existing workaround or alternatives
+
+## Self-hosting, security or accessibility impact
+
+<!-- Optional: include mockups or examples, with internal details redacted. -->

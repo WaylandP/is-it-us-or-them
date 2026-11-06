@@ -63,7 +63,8 @@ describe('auth', () => {
     assert.equal(r.status, 200);
     const j = await r.json();
     assert.equal(j.site.name, 'Test Status');
-    assert.equal(j.verdict.who, 'none');
+    assert.equal(j.verdict.who, 'unknown');
+    assert.equal(j.verdict.headline, 'No services configured.');
     assert.match(j.verdict.detail, /Nothing is being tracked yet/);
   });
 });

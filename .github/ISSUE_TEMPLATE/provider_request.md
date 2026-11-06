@@ -1,19 +1,23 @@
 ---
-name: New feed provider
-about: Ask for support for a vendor status page
-title: 'Provider: '
+name: Provider request
+about: Suggest a vendor or internal monitoring integration
+title: "Provider: "
 labels: provider
-assignees: ''
+assignees: ""
 ---
 
-## Vendor
+## Service/provider name
 
-<!-- e.g. Okta, Microsoft 365, Dropbox -->
+## Public status site and documented API
 
-## Public status page URL
+<!-- Please do not include private service URLs or credentials. -->
 
-## Machine-readable feed, if you know of one
+## Format and authentication
 
-<!-- JSON API, RSS/Atom feed, or "it looks like Statuspage.io" (if so, the existing statuspage provider probably already works: try it with the page's root URL). -->
+<!-- Statuspage, JSON API, RSS/Atom, OAuth, etc. -->
 
-## Does it need authentication?
+## Which products, regions or components matter?
+
+## Limitations or licensing considerations
+
+<!-- Have you tested the existing generic Statuspage, RSS or HTTP provider? -->

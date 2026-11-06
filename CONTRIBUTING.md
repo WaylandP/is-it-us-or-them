@@ -1,80 +1,77 @@
-# Contributing
+# Contributing to Is It Us or Them?
 
-Thanks for helping make this a better status page. Issues and pull requests
-are welcome.
+Thanks for helping build a dependable, open-source status tool for IT teams. We welcome bug fixes, accessible UX improvements, documentation updates and useful provider integrations.
 
-## Getting set up
+## Before you start
+
+Check [open issues](https://github.com/WaylandP/is-it-us-or-them/issues) for existing work. For substantial architecture changes or integrations requiring credentials, describe your proposed approach in an issue first. Never include credentials, private URLs, or organization-specific logs in public discussions.
+
+## Development setup
+
+Requires Node.js 20.10+ and npm:
 
 ```bash
 git clone https://github.com/WaylandP/is-it-us-or-them.git
 cd is-it-us-or-them
-npm install
-ADMIN_TOKEN=dev npm run dev
+npm ci
+ADMIN_TOKEN=local-development-only npm run dev
 ```
 
-The server restarts on file changes. The public page is at
-<http://localhost:3000> and the admin page at <http://localhost:3000/admin>.
-
-There is no build step and no transpiler. The server is plain ES modules on
-Node 20+; the frontend is vanilla HTML, CSS and JavaScript modules.
-
-## Running tests
+Browse http://localhost:3000 and http://localhost:3000/admin. Use a strong token in any shared environment. No frontend build step is needed.
 
 ```bash
 npm test
 ```
 
-Tests use `node:test` and need no network: vendor feeds are served from
-recorded fixtures in `test/fixtures/` by a local mock server. Please add or
-update tests with any change to a provider, the verdict logic or the API.
+Tests use `node:test`. The local mock feed server in `test/helpers.js` serves fixtures from `test/fixtures/`; tests do not require live vendor APIs.
 
-## Adding a feed provider
+## Working on features
 
-This is the most useful kind of contribution. A provider is one file in
-`src/providers/`:
+1. Reproduce the problem or define the expected user-facing outcome.
+2. Check `src/verdict.js`, `src/snapshot.js`, `src/poller.js` and related code paths when changing status behavior.
+3. Keep changes focused and dependency-light; avoid unnecessary rewrites.
+4. Add or update automated tests, including unknown/error conditions.
+5. For UI changes, inspect public **and** admin pages in light/dark themes and at phone widths. Include before/after screenshots.
+6. Update README, deployment guidance or changelog for user-visible changes.
+7. Open a descriptive pull request using the template.
+
+## Adding a provider
+
+Add `src/providers/<provider>.js` exporting a descriptor:
 
 ```js
 export default {
-  id: 'acme',                       // stable identifier stored with each service
-  label: 'Acme Status',             // shown in the admin form
-  description: 'What it reads.',    // shown under the provider picker
-  defaultOwner: 'vendor',           // 'vendor' (problems are "them") or 'internal'
-  fields: [                         // drives the admin form and validation
-    { key: 'baseUrl', label: 'Status page URL', type: 'url', required: true },
-    { key: 'region', label: 'Region', type: 'text', placeholder: 'eu-west', help: 'Optional.' },
+  id: 'example',
+  label: 'Example Status',
+  description: 'Reads Example service health.',
+  defaultOwner: 'vendor', // or 'internal'
+  fields: [
+    { key: 'baseUrl', label: 'Status URL', type: 'url', required: true },
   ],
   async check(service, ctx) {
-    // ctx.timeoutMs, ctx.now
-    // Return { state, summary, incidents, maintenances }
+    // ctx.now and ctx.timeoutMs are available.
+    // Return { state, summary, incidents, maintenances }.
   },
 };
 ```
 
-- `state` is one of `operational`, `maintenance`, `degraded`,
-  `partial_outage`, `major_outage`, `unknown` (see `src/states.js`).
-- `incidents` entries look like `{ id, title, status, impact, url, startedAt,
-  updatedAt, latestUpdate, components }`.
-- `maintenances` entries look like `{ id, title, status, url, startsAt, endsAt }`.
-- Throw an `Error` with a readable message when the feed cannot be read; the
-  poller reports it on the page and keeps the last known state.
+Register the provider in `src/providers/index.js`. States must match `src/states.js`: `operational`, `maintenance`, `degraded`, `partial_outage`, `major_outage` or `unknown`.
 
-Register the provider in `src/providers/index.js`, add a fixture under
-`test/fixtures/` captured from the real feed (trim it to a few representative
-incidents), and add tests in `test/providers.test.js`. Document it in the
-providers table in `README.md`.
+Incident entries may include `id`, `title`, `status`, `impact`, `url`, `startedAt`, `updatedAt`, `latestUpdate` and `components`; maintenance entries may include `id`, `title`, `status`, `url`, `startsAt` and `endsAt`.
 
-Please do not add runtime dependencies for a provider unless the format
-genuinely cannot be handled with `fetch` and a little parsing.
+Throw a readable error for unreadable feeds; the poller will surface an unknown state and retain last-known status. Do not silently report healthy after a failed fetch. Be cautious with feed heuristics, authentication, redirects and untrusted content.
 
-## Pull requests
+Add representative, **sanitized** fixtures and tests in `test/providers.test.js`. Document setup in README. Prefer native `fetch` and existing helpers over new runtime dependencies.
 
-- Keep changes focused. One feature or fix per PR.
-- Run `npm test` before pushing.
-- Describe what changed and why, and include a screenshot for UI changes.
-- CI runs the tests on Node 20, 22 and 24 and builds the Docker image.
+## Pull request checklist
 
-## Reporting bugs
+- [ ] The change solves the described issue without unrelated rewrites.
+- [ ] `npm test` passes locally or a reason is documented.
+- [ ] Negative/unknown states are tested where relevant.
+- [ ] Security and backward-compatibility impacts are considered.
+- [ ] Docs reflect the new behavior.
+- [ ] UI screenshots are included when applicable.
 
-Open an issue using the bug template. Include the provider involved, the
-feed URL if it is public, and what the page showed versus what you expected.
-Never paste your `ADMIN_TOKEN` or a Slack signing secret into an issue.
+CI tests Node 20, 22 and 24 and builds the Docker image. An open PR is not equivalent to an approved release.
+
+For private security reports, follow [SECURITY.md](SECURITY.md).

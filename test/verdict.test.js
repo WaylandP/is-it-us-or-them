@@ -125,7 +125,7 @@ describe('computeVerdict', () => {
     assert.equal(v.who, 'none');
   });
 
-  test('unknown feeds are reported but not alarming; disabled services hidden', () => {
+  test('unreadable feeds cannot produce all clear; disabled services are hidden', () => {
     const v = computeVerdict({
       services: [svc('g', 'Google'), svc('z', 'Zoom', 'vendor', { enabled: false })],
       statuses: new Map(),
@@ -133,10 +133,65 @@ describe('computeVerdict', () => {
       posts: [],
       now,
     });
-    assert.equal(v.who, 'none');
+    assert.equal(v.who, 'unknown');
+    assert.equal(v.headline, 'Status uncertain.');
+    assert.equal(v.level, 'unknown');
     assert.equal(v.counts.total, 1);
     assert.equal(v.counts.unknown, 1);
-    assert.match(v.detail, /1 feed could not be read yet/);
+    assert.match(v.detail, /1 service has unknown status/);
+  });
+
+  test('a missing feed among healthy services still makes the verdict uncertain', () => {
+    const v = computeVerdict({
+      services: [svc('g', 'Google'), svc('s', 'Slack')],
+      statuses: new Map([['g', status('operational')]]),
+      maintenance: [],
+      posts: [],
+      now,
+    });
+    assert.equal(v.who, 'unknown');
+    assert.equal(v.level, 'unknown');
+    assert.equal(v.counts.unknown, 1);
+  });
+
+  test('a known outage remains attributed when another feed is unknown', () => {
+    const v = computeVerdict({
+      services: [svc('g', 'Google'), svc('s', 'Slack')],
+      statuses: new Map([['g', status('major_outage')]]),
+      maintenance: [],
+      posts: [],
+      now,
+    });
+    assert.equal(v.who, 'them');
+    assert.equal(v.level, 'major_outage');
+    assert.equal(v.counts.unknown, 1);
+  });
+
+  test('provider maintenance alone is not called all clear', () => {
+    const v = computeVerdict({
+      services: [svc('g', 'Google')],
+      statuses: new Map([['g', status('maintenance')]]),
+      maintenance: [],
+      posts: [],
+      now,
+    });
+    assert.equal(v.who, 'maintenance');
+    assert.equal(v.headline, 'Maintenance reported.');
+    assert.equal(v.level, 'maintenance');
+  });
+
+  test('no services configured is a setup state, not all clear', () => {
+    const v = computeVerdict({
+      services: [],
+      statuses: new Map(),
+      maintenance: [],
+      posts: [],
+      now,
+    });
+    assert.equal(v.who, 'unknown');
+    assert.equal(v.level, 'unknown');
+    assert.equal(v.headline, 'No services configured.');
+    assert.match(v.detail, /Add services/);
   });
 });
 
