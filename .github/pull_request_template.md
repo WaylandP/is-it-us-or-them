@@ -1,15 +1,22 @@
-## What changed
+## Summary
 
-<!-- One or two sentences. Link the issue if there is one. -->
+<!-- What changed and why? Link relevant issues, e.g. Closes #123. -->
 
-## Why
+## User impact and compatibility
 
-## How it was tested
+<!-- Mention status/verdict changes, API compatibility, data format changes, or deployment instructions. -->
 
-- [ ] `npm test` passes
-- [ ] Checked the public page and admin page in a browser (screenshot below for UI changes)
-- [ ] New or changed provider has a fixture in `test/fixtures/` and tests
+## Verification
 
-## Screenshots
+- [ ] `npm test` completed (or explain why not).
+- [ ] New/changed status logic includes unknown/error cases where applicable.
+- [ ] Docker/Compose setup checked if deployment files changed.
+- [ ] Public/admin UI checked on phone and desktop, light/dark, if applicable.
+- [ ] Security risks (auth, public data, SSRF, XSS) considered.
+- [ ] Documentation/changelog updated when needed.
 
-<!-- For UI changes. Delete this section otherwise. -->
+## Screenshots or logs
+
+<!-- For UI changes, before/after screenshots. Redact tokens, internal URLs and private data. -->
+
+## Remaining risks or follow-up work

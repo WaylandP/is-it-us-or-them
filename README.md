@@ -1,239 +1,170 @@
-# Is it us or them?
+# Is It Us or Them?
+
+**Your IT status page. One question. A clearer answer.**
 
 [![CI](https://github.com/WaylandP/is-it-us-or-them/actions/workflows/ci.yml/badge.svg)](https://github.com/WaylandP/is-it-us-or-them/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node 20+](https://img.shields.io/badge/node-%3E%3D20.10-brightgreen.svg)](package.json)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-20.10%2B-339933.svg)](package.json)
 
-An internal IT status page that answers the question before anyone asks it.
+**Is It Us or Them?** is a free, open-source, self-hosted status dashboard for IT teams. It brings external vendor outages, internal checks, scheduled maintenance, and IT announcements into one place, so employees can quickly understand what's happening without another "is everything down?" message.
 
-It combines **vendor status feeds** (Google Workspace, Slack, Zoom, Jamf, and
-anything on Statuspage.io or with an RSS feed) with **your own maintenance
-calendar** and **IT announcements**, then puts a one-line verdict at the top:
+- **Self-hosted:** your infrastructure, configuration, and data; no required cloud account or subscription.
+- **Lightweight:** Express 5 and vanilla JavaScript; no frontend build or external database.
+- **Designed for IT:** service ownership, incident timelines, maintenance windows, and a clear status summary.
 
-> **It's them.** Zoom is having problems on the vendor side.
->
-> **It's us.** VPN is under scheduled maintenance.
->
-> **All clear.** All 7 tracked services look operational.
+![Public status dashboard showing the verdict, services and incidents](docs/screenshot.png)
 
-When someone pings "is Google down?", the answer is already posted. It also
-gives your IT team's comms a home: incidents with timeline updates, pinned
-announcements, and scheduled maintenance windows, all on one page.
+> [!IMPORTANT]
+> This is an early-stage project (package version `0.1.0`). Review the [security considerations](SECURITY.md) and [current limitations](#known-limitations) before exposing it outside a trusted network.
 
-Zero build step, one runtime dependency (Express), data in a single JSON file.
+## The answer at a glance
 
-![Status page showing the verdict banner, service cards, incidents, maintenance and announcements](docs/screenshot.png)
+| Verdict | Meaning |
+| --- | --- |
+| **It's Us** | An internal system or IT-managed incident/maintenance is affected. |
+| **It's Them** | An external provider reports a problem. |
+| **It's Both** | Internal and external issues coexist. |
+| **All Clear** | All enabled monitored services have reported healthy status. |
+| **Status Uncertain** | No known issues, but some status information is missing or unreadable. |
+| **Maintenance Reported** | A service reports maintenance without an incident classified as internal or external. |
 
-## Features
+A failed check does **not** establish that a vendor is down. Equally, an unreadable feed is **not** proof that the vendor is healthy.
 
-- **Verdict banner**: "It's us" / "It's them" / "It's both" / "All clear",
-  computed from feeds plus your own maintenance and incident posts.
-- **Track whatever you want**: add and remove services from the admin page.
-  Six feed providers cover most vendors and internal systems (see below).
-- **Maintenance calendar**: scheduled windows show up two weeks ahead and
-  automatically flip affected services to "under maintenance" while active.
-- **IT comms**: announcements, incident posts with timeline updates, pinning,
-  and resolution. An open incident post on a service marks it as "us", even
-  if the vendor says everything is fine.
-- **Chat-friendly**: `GET /api/status.txt` is a plain-text brief for pasting
-  into Slack or Teams, and a Slack slash command endpoint is built in.
-- **Light and dark**, mobile-friendly, auto-refreshing public page.
-- **Admin API** with a bearer token, so you can script it.
+## What works today
 
-## Quick start
+- **Service dashboard** with groups, ownership, service cards, light/dark themes and mobile layouts.
+- **Six check types:** Atlassian Statuspage, Slack, Google Workspace/Cloud, RSS/Atom, HTTP and manual.
+- **Incident posts** with severity, affected services, resolution, pinned messages and timeline updates.
+- **Maintenance scheduling** with upcoming and active windows; upcoming windows appear up to 14 days ahead.
+- **Admin interface** for adding, editing, testing, disabling, refreshing and removing services.
+- **Plain-text status** at `/api/status.txt` and an optional verified Slack slash command.
+- **Docker and Compose** deployment, local JSON persistence and automated tests.
+
+## Quick start: Docker Compose
+
+**Requirements:** Docker Engine with the Compose plugin, and a free port on the host.
 
 ```bash
 git clone https://github.com/WaylandP/is-it-us-or-them.git
 cd is-it-us-or-them
-npm install
-ADMIN_TOKEN=change-me npm start
+cp .env.example .env
 ```
 
-Open <http://localhost:3000>. The admin page is at `/admin`; paste the
-`ADMIN_TOKEN` to sign in. A fresh install comes seeded with Google Workspace,
-Slack, Zoom, and Jamf. Remove or edit them freely.
-
-If you do not set `ADMIN_TOKEN`, a random one is generated and printed in the
-server log at startup.
-
-### Docker
+Generate a unique admin token and paste it into `.env` as `ADMIN_TOKEN=...`:
 
 ```bash
-cp .env.example .env     # set ADMIN_TOKEN at minimum
-docker compose up -d
+openssl rand -hex 32
 ```
 
-Data is kept in the `status-data` volume at `/data/data.json`.
+Then start the application:
 
-## Adding and removing services
+```bash
+docker compose up -d --build
+docker compose ps
+```
 
-Go to `/admin` → **Services** → **Add service**. Pick a feed provider, fill in
-its fields, hit **Test feed** to see what it returns, then save. Every row has
-Edit / Refresh / Disable / Delete buttons. Disabled services are kept but not
-polled or shown.
+Open **http://localhost:3000** for the status dashboard, or **http://localhost:3000/admin** for administration.
 
-Each service has an **owner**:
+By default, Compose binds **only to 127.0.0.1** for safer local setup. To use it from another device, configure a reverse proxy, VPN or deliberate bind address as explained in the [deployment guide](docs/DEPLOYMENT.md). Do not expose the admin screen unprotected on the public internet.
 
-- **Vendor**: problems reported by the feed count as *them*.
-- **Internal**: problems count as *us*.
+A new installation starts with four example services: Google Workspace, Slack, Zoom and Jamf. These require outbound internet access and can be removed.
 
-And a **group** heading for the public page (for example "Vendors",
-"Internal", "Collaboration").
+### Run directly with Node.js
 
-### Feed providers
+Requires Node.js 20.10+ and npm.
 
-| Provider | Use it for | Configuration |
-| --- | --- | --- |
-| `statuspage` | Any Atlassian Statuspage site: Zoom, Jamf, GitHub, Atlassian, Cloudflare, Dropbox, Okta, Twilio, DigitalOcean, ... | Status page root URL (reads `/api/v2/summary.json`). Optional list of component names to narrow it down, e.g. `Zoom Meetings, Zoom Phone`. |
-| `slack` | Slack | Nothing. Reads `slack-status.com/api/v2.0.0/current`. |
-| `google` | Google Workspace or Google Cloud | Feed URL (defaults to the Workspace dashboard) and an optional product list, e.g. `Gmail, Google Meet, Google Drive`. |
-| `rss` | Vendors that only publish an RSS/Atom status feed | Feed URL and a window in hours. Items newer than the window are shown as active incidents and mark the service degraded. Heuristic, but better than nothing. |
-| `http` | Internal apps, VPN portal, wiki, anything with a URL | URL to request. 2xx/3xx is operational. Optional exact status code and a latency threshold for "degraded". |
-| `manual` | Printers, Wi-Fi, phones, badge readers: things nothing monitors for you | The IT team sets the state and a message from the admin page or via `PATCH /api/services/:id/state`. |
+```bash
+npm ci
+ADMIN_TOKEN="$(openssl rand -hex 32)" npm start
+```
 
-Microsoft 365 is not included because its service health API requires a Graph
-app registration. Point an `rss` provider at a third-party feed, or use a
-`manual` service, in the meantime.
+Open http://localhost:3000. For persistent use, supply a stable token through your environment or process manager. Data defaults to `./data/data.json`. `npm run dev` restarts on file changes.
 
-### Corporate proxies
+## Configure your status page
 
-Vendor feeds are fetched with Node's built-in `fetch`. If the host needs an
-egress proxy, set `HTTPS_PROXY` (and `NO_PROXY`) and run with
-`NODE_USE_ENV_PROXY=1` (Node 22.21+ / 24). The Docker image sets that flag
-already.
+Open `/admin` and enter your configured admin token. Under **Services**, add a provider, enter its settings, use **Test feed**, and save. Choose **Vendor** for external services and **Internal** for systems your team manages.
+
+| Provider | Intended use |
+| --- | --- |
+| `statuspage` | Statuspage-compatible vendors such as Zoom, Jamf, or GitHub; accepts a base URL and optional component filters |
+| `slack` | Slack's public service-status API; no credentials required |
+| `google` | Google Workspace/Cloud incidents feed; optional product filtering |
+| `rss` | RSS/Atom updates; recent items are treated as degraded by a **heuristic**, not as verified active incidents |
+| `http` | Reachability, expected HTTP code and optional latency threshold for configured URLs |
+| `manual` | IT-managed states for systems without an automated feed |
+
+Use **Maintenance** to announce planned work and **Announcements** for messages or incidents with updates.
+
+Microsoft 365 service health is **not** a native provider yet; it needs authenticated Microsoft Graph integration. See [Roadmap](docs/ROADMAP.md) for planned work, not promised functionality.
 
 ## Configuration
 
-All configuration is through environment variables. See `.env.example`.
+Compose reads `.env`. The application reads the following environment variables:
 
-| Variable | Default | Meaning |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `3000` | Listen port |
-| `ADMIN_TOKEN` | generated | Token for the admin page and write API |
-| `DATA_DIR` | `./data` | Directory holding `data.json` |
-| `POLL_INTERVAL_SECONDS` | `60` | How often vendor feeds are polled |
-| `FETCH_TIMEOUT_MS` | `10000` | Per-feed request timeout |
-| `SITE_NAME` | `Is it us or them?` | Page title / brand |
-| `ORG_NAME` | `IT` | Used in "From IT" |
-| `SLACK_SIGNING_SECRET` | empty | If set, Slack slash command requests are verified |
-| `SEED_SERVICES` | `true` | Seed Google/Slack/Zoom/Jamf on first run |
+| `ADMIN_TOKEN` | Random token printed on startup if unset outside Compose | Required for writes; **Compose requires an explicit value** |
+| `PORT` | `3000` | Container/server listening port |
+| `DATA_DIR` | `./data` (Node) / `/data` (Docker) | JSON persistence directory |
+| `SITE_NAME` | `Is it us or them?` | Dashboard branding |
+| `ORG_NAME` | `IT` | Announcement attribution |
+| `POLL_INTERVAL_SECONDS` | `60` | Vendor polling interval |
+| `FETCH_TIMEOUT_MS` | `10000` | Timeout for individual feed requests |
+| `SEED_SERVICES` | `true` | Seed example services on initial setup only |
+| `SLACK_SIGNING_SECRET` | unset | Optional signing verification for Slack commands |
 
-## Slack slash command
+Compose-only variables `BIND_ADDRESS` and `HOST_PORT` control the published host port. See [Deployment](docs/DEPLOYMENT.md). Never commit a real `.env` or tokens.
 
-1. Create a Slack app with a slash command, e.g. `/isitdown`, pointing at
-   `https://status.example.com/slack/command`.
-2. Put the app's signing secret in `SLACK_SIGNING_SECRET`.
-3. `/isitdown` posts the full brief; `/isitdown zoom` filters to matching
-   services.
+## API and automation
 
-The server must be reachable from Slack for this to work. Without it,
-`/api/status.txt` gives the same text for copy-and-paste.
+- `GET /api/status`: public snapshot used by the dashboard.
+- `GET /api/status.txt`: short text report, optionally filtered with `?q=zoom`.
+- `GET /api/providers`, `/api/services`, `/api/maintenance`, `/api/posts`: public reads. **The services list includes configuration fields.**
+- `GET /healthz`: process health, **not** proof that any monitored service is healthy.
+- `POST /api/services`, `PUT /api/services/:id`, `PATCH /api/services/:id/state`, `DELETE /api/services/:id`: admin writes; similar endpoints exist for maintenance and posts.
+- `POST /api/services/test` and `POST /api/services/:id/refresh`: administrator-initiated checks.
+- `POST /slack/command`: optional Slack slash-command response.
 
-## API
-
-Reads are public. Writes need `Authorization: Bearer <ADMIN_TOKEN>`.
-
-```
-GET    /api/status                 everything the page shows, as JSON
-GET    /api/status.txt[?q=zoom]    plain-text brief
-GET    /api/providers              provider descriptors (drives the admin form)
-GET    /healthz
-
-GET    /api/services
-POST   /api/services               { name, provider, owner, group, statusPageUrl, description, order, enabled, config }
-POST   /api/services/test          same body; checks the feed without saving
-PUT    /api/services/:id           partial update
-PATCH  /api/services/:id/state     { state, message }  (manual services only)
-POST   /api/services/:id/refresh   poll now
-DELETE /api/services/:id
-
-GET    /api/maintenance
-POST   /api/maintenance            { title, description, services: [id], startsAt, endsAt, status }
-PUT    /api/maintenance/:id
-DELETE /api/maintenance/:id
-
-GET    /api/posts
-POST   /api/posts                  { title, body, severity: info|warning|critical, services: [id], pinned, resolved }
-PUT    /api/posts/:id
-POST   /api/posts/:id/updates      { body, resolved? }  append a timeline update
-DELETE /api/posts/:id
-
-POST   /slack/command              Slack slash command (form-encoded)
-```
-
-Example: set a manual service to degraded from a script.
+All admin writes require `Authorization: Bearer <ADMIN_TOKEN>`. Read endpoints are unauthenticated by the application; protect network access as appropriate.
 
 ```bash
-curl -X PATCH http://localhost:3000/api/services/<id>/state \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"state":"degraded","message":"Floor 3 printers offline, vendor on site"}'
+curl http://localhost:3000/api/status.txt
+curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:3000/api/admin/whoami
 ```
 
-### Service states
+## Architecture and development
 
-`operational`, `maintenance`, `degraded`, `partial_outage`, `major_outage`,
-`unknown` (feed could not be read; the last known state is kept alongside).
-
-## How the verdict is decided
-
-For each enabled service:
-
-1. If an **unresolved incident post** (warning/critical) names it, the service
-   shows that severity and counts as **us**.
-2. Else if an **active maintenance window** names it, the service shows
-   "under maintenance" and counts as **us**.
-3. Else the feed's state is used. A problem counts as **them** for
-   vendor-owned services and **us** for internal ones.
-
-Incident posts and maintenance windows with no services attached still count
-as "us". The headline is "both" when there is at least one of each.
-
-## Development
+```text
+public/             Status dashboard and admin interface (no build step)
+src/providers/       Provider adapters
+src/poller.js        Periodic checks and in-memory results
+src/verdict.js       "Us", "Them", "Both" and uncertain status rules
+src/snapshot.js      Public JSON snapshot and text report
+src/routes/          Express routes
+src/store.js         Local JSON data store
+test/                Node test runner and feed fixtures
+```
 
 ```bash
-npm run dev     # restarts on file changes
-npm test        # node:test, no network needed (feeds are mocked)
+npm ci
+npm test
+npm run dev
 ```
 
-Layout:
+Learn more: [Architecture](docs/ARCHITECTURE.md) · [Self-hosting and operations](docs/DEPLOYMENT.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md).
 
-```
-src/
-  server.js        entry point
-  app.js           Express app factory (used by tests)
-  poller.js        polls providers on an interval, keeps statuses in memory
-  verdict.js       us-or-them logic
-  snapshot.js      builds /api/status and the text brief
-  store.js         JSON file persistence
-  providers/       one file per feed type; add your own here
-  routes/          public, services, maintenance, posts, slack
-public/            static UI (no build step)
-test/              node:test suites and recorded feed fixtures
-```
+## Known limitations
 
-### Adding a provider
+- Designed for a **single running process** with a persistent filesystem. It is not suitable for serverless or multi-replica use without architectural changes.
+- Provider states live in memory and are repolled after restart; there is no historical uptime database.
+- A successful poll can become stale between checks; automatic age-based freshness enforcement is not yet implemented. Check timestamps and feed errors.
+- RSS updates are interpreted heuristically; a new post may describe a resolved event.
+- Configurable URLs are fetched by the server, including redirects. **SSRF hardening and a safe network egress policy are required before exposing the admin interface to untrusted users.**
+- The admin token is stored in browser local storage. Use a trusted browser and protect the site behind VPN/SSO or a reverse proxy.
+- No built-in multiuser roles, SSO, alert delivery, or Teams integration.
 
-Create `src/providers/<name>.js` exporting `{ id, label, description,
-defaultOwner, fields, check(service, ctx) }` and register it in
-`src/providers/index.js`. `fields` drives the admin form; `check` returns
-`{ state, summary, incidents, maintenances }`. See `statuspage.js` for a
-complete example.
+## Contribute
 
-## Deployment notes
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and the provider contract. For vulnerabilities, use the process in [SECURITY.md](SECURITY.md), **not** a public bug report.
 
-This is a long-running Node process with a file on disk, so run it on a VM,
-a container host, or a small Kubernetes deployment with a persistent volume.
-It is not suited to serverless platforms. Put it behind your SSO proxy or
-VPN if the page itself should be internal-only; the admin token only
-protects writes.
-
-## Contributing and security
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and the
-provider contract, and [SECURITY.md](SECURITY.md) for deployment guidance and
-how to report a vulnerability. Changes are tracked in
-[CHANGELOG.md](CHANGELOG.md).
-
-## License
-
-[MIT](LICENSE)
+Licensed under the [MIT License](LICENSE). No subscription and no mandatory telemetry.

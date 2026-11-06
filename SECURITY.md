@@ -1,34 +1,33 @@
-# Security
+# Security policy
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for security problems. Use GitHub's private
-vulnerability reporting on this repository ("Security" tab → "Report a
-vulnerability"), or contact the maintainer directly. You should get a reply
-within a few days.
+**Do not disclose exploit details, credentials or sensitive logs in a public issue.**
 
-## Deployment guidance
+If GitHub private vulnerability reporting is available on the repository's **Security** tab, use it. If it is not available, open a minimal public issue asking the maintainer to arrange a private contact channel **without including sensitive technical details**.
 
-This application is designed to run inside an organisation's network.
+There is no guaranteed response SLA at this stage. Maintainers will triage reports as availability permits.
 
-- **Reads are public by design.** Anyone who can reach the server can read
-  the status page and the JSON API. Put the service behind your SSO proxy,
-  VPN or firewall if the page itself should be internal-only.
-- **Writes require `ADMIN_TOKEN`.** Treat it like a password: set it from a
-  secret store, do not commit it, and rotate it if it leaks. If it is unset,
-  a random token is generated at startup and printed to the server log.
-- **Slack slash command.** Set `SLACK_SIGNING_SECRET` so requests to
-  `/slack/command` are verified. Without it, anyone who can reach the
-  endpoint can call it (it only returns the public brief, but still).
-- **Outbound requests.** The server fetches the feed URLs and HTTP-check
-  URLs that admins configure. Only people you trust should hold the admin
-  token, since an admin can point an HTTP check at any URL reachable from
-  the server.
-- **Data at rest.** All state lives in `DATA_DIR/data.json` in plain text.
-  It contains service configuration, maintenance windows and posts, nothing
-  more sensitive than what the page shows.
-- **TLS.** The app serves plain HTTP. Terminate TLS at a reverse proxy.
+## Deployment model and current limitations
+
+This is an early-stage, self-hosted application. Treat it as an **internal-only service** unless you have configured and reviewed appropriate external access controls.
+
+- **Unauthenticated reads:** `/api/status`, `/api/services`, `/api/posts` and `/api/maintenance` can reveal service names, service configuration URLs and internal announcements to any reachable client. Protect the entire application behind a VPN, firewall or identity-aware reverse proxy when it contains internal data.
+- **Administrative authentication:** writes require a bearer `ADMIN_TOKEN`. Use a unique, high-entropy secret. Compose rejects missing or empty tokens; a direct Node startup without a token generates one and prints it to logs. Rotate secrets after suspected exposure.
+- **Browser storage:** the admin UI stores the token in local storage. Only administer the instance through a trusted browser over HTTPS or a protected local connection. Clear site storage after using a shared computer.
+- **SSRF risk:** administrators can configure URLs that the server fetches, and redirects are followed. URL syntax validation is **not** an SSRF defense. Restrict admin access and container egress to approved destinations; don't allow untrusted administrators.
+- **Slack:** set `SLACK_SIGNING_SECRET` if enabling slash commands. Without it, requests are not signature-verified. Avoid publishing an unsigned endpoint.
+- **Storage:** `data.json` is unencrypted. Protect the container volume and backups and limit file-system access.
+- **TLS:** the app serves HTTP. Put it behind a correctly configured HTTPS reverse proxy when accessed outside localhost.
+- **Monitoring accuracy:** an unavailable feed should be presented as uncertain. Polling states are in memory, and automatic stale-age enforcement is not yet implemented.
+- **No telemetry:** the application itself does not require an external analytics or telemetry account. Configured vendor checks and optional Slack integration still make outbound requests.
+
+See [Self-hosting and operations](docs/DEPLOYMENT.md) for safer port binding, backup and restore guidance.
 
 ## Supported versions
 
-Only the latest release on `main` receives fixes.
+Security fixes are currently developed against the latest `main` branch. There is no published support schedule or long-term-support release.
+
+## Maintainer security checklist
+
+Before broad public exposure, prioritize SSRF protection, review unauthenticated configuration endpoints, consider stronger admin sessions, add deployment threat-model tests, and validate HTTP response security headers.

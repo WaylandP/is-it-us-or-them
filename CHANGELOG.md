@@ -1,28 +1,21 @@
 # Changelog
 
-All notable changes to this project are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Notable changes to Is It Us or Them? are recorded here. Format inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## Unreleased
 
-## [0.1.0] - 2026-10-29
+### Changed
+- Clarify open-source self-hosting, architecture, roadmap, security considerations and contributor guidance.
+- Bind the Compose host port to loopback by default; make monitoring settings configurable via `.env`.
+- Distinguish uncertain and vendor-maintenance-only statuses from verified "All Clear".
+- Tighten default CI permissions and document the maintainer release process.
+
+## 0.1.0 — 2026-10-29
 
 ### Added
+- Public service dashboard, vendor and internal service ownership, incident posts, maintenance, and IT announcements.
+- Providers for Statuspage, Slack, Google, RSS/Atom, HTTP checks and manual statuses.
+- Admin interface, plain-text status endpoint and optional Slack slash command.
+- Docker/Compose setup, JSON persistence, basic tests and GitHub Actions CI.
 
-- Public status page with an "us or them" verdict banner, service cards,
-  active incidents, maintenance and announcements. Light and dark mode,
-  mobile layout, auto-refresh.
-- Admin page to add, edit, test, disable and remove tracked services, and to
-  manage maintenance windows and posts.
-- Feed providers: Statuspage.io, Slack, Google Workspace/Cloud, RSS/Atom,
-  HTTP check, Manual.
-- Maintenance calendar that flips affected services to "under maintenance"
-  while a window is active.
-- Announcements and incident posts with timeline updates, pinning and
-  resolution.
-- Plain-text brief at `/api/status.txt` and a Slack slash-command endpoint.
-- Token-protected write API, JSON file persistence, Dockerfile, Compose file,
-  CI workflow and a `node:test` suite with recorded feed fixtures.
-
-[Unreleased]: https://github.com/WaylandP/is-it-us-or-them/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/WaylandP/is-it-us-or-them/releases/tag/v0.1.0
+> The package was set to `0.1.0` in the initial code. **No tagged GitHub release has been published yet.** See [docs/RELEASING.md](docs/RELEASING.md) before publishing one.

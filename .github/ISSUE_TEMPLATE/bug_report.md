@@ -1,27 +1,29 @@
 ---
 name: Bug report
-about: Something is wrong on the page, in the admin UI or in a feed
-title: ''
+about: Report incorrect status, a broken UI, or another reproducible problem
+title: ""
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
-## What happened
+## What happened?
 
-## What you expected
+## What should have happened?
 
-## How to reproduce
-
+## Steps to reproduce
 1.
 2.
+3.
 
 ## Environment
+- Version or commit:
+- Node version or Docker image:
+- Browser and device (for UI bugs):
+- Provider and whether the service is internal or external:
+- Was the feed healthy, failed, stale or never checked?
+- Public feed URL, only if safe to share:
 
-- Version / commit:
-- Node version (or Docker image tag):
-- Provider involved (statuspage, slack, google, rss, http, manual):
-- Feed URL, if it is public:
+## Evidence
+<!-- Screenshots, redacted logs or minimal reproduction. -->
 
-## Logs
-
-<!-- Relevant lines from the server log. Do NOT include your ADMIN_TOKEN or Slack signing secret. -->
+**Do not post admin tokens, signing secrets, private service URLs, customer information, or vulnerability exploit details.** For security reports use SECURITY.md.

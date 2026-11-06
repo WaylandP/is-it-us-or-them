@@ -78,7 +78,7 @@ export function computeVerdict({ services, statuses, maintenance, posts, now = n
 
   const them = rows.filter((r) => r.theirs);
   const us = rows.filter((r) => r.ours);
-  const level = worst(rows.map((r) => r.state));
+  let level = worst(rows.map((r) => r.state));
   const unknown = rows.filter((r) => r.state === 'unknown');
 
   // Internal incident posts not tied to a specific tracked service still count as "us".
@@ -89,7 +89,12 @@ export function computeVerdict({ services, statuses, maintenance, posts, now = n
   if (them.length && (us.length || generalPosts.length || generalMaint.length)) who = 'both';
   else if (them.length) who = 'them';
   else if (us.length || generalPosts.length || generalMaint.length) who = 'us';
+  else if (!rows.length || unknown.length) who = 'unknown';
+  else if (rows.some((r) => r.state === 'maintenance')) who = 'maintenance';
   else who = 'none';
+
+  // An unreadable or not-yet-checked feed is not evidence of a healthy system.
+  if (who === 'unknown') level = 'unknown';
 
   const names = (list) => list.map((r) => r.name);
   let headline;
@@ -107,13 +112,21 @@ export function computeVerdict({ services, statuses, maintenance, posts, now = n
       headline = "It's both.";
       detail = `${joinNames(names(them))} ${them.length === 1 ? 'has' : 'have'} vendor-side problems. ${describeUs(us, generalPosts, generalMaint)}`;
       break;
+    case 'unknown':
+      headline = rows.length ? 'Status uncertain.' : 'No services configured.';
+      detail = rows.length
+        ? `No known incidents, but ${unknown.length} service${unknown.length === 1 ? '' : 's'} ${unknown.length === 1 ? 'has' : 'have'} unknown status. Review feed errors and check timestamps.`
+        : 'Nothing is being tracked yet. Add services in the admin page.';
+      break;
+    case 'maintenance': {
+      headline = 'Maintenance reported.';
+      const affected = rows.filter((r) => r.state === 'maintenance');
+      detail = `${joinNames(names(affected))} ${affected.length === 1 ? 'is' : 'are'} under maintenance.`;
+      break;
+    }
     default:
       headline = 'All clear.';
-      detail = unknown.length
-        ? `No known problems. ${unknown.length} feed${unknown.length === 1 ? '' : 's'} could not be read yet.`
-        : rows.length
-          ? `All ${rows.length} tracked service${rows.length === 1 ? '' : 's'} look operational.`
-          : 'Nothing is being tracked yet. Add services in the admin page.';
+      detail = `All ${rows.length} tracked service${rows.length === 1 ? '' : 's'} look operational.`;
   }
 
   return {
