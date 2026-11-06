@@ -4,3 +4,5 @@ data/*.json
 .env
 npm-debug.log*
 .DS_Store
+ui-artifacts/
+__pycache__/
