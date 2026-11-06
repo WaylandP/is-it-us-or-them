@@ -6,7 +6,6 @@ import { fixture, mockServer } from './helpers.js';
 
 const ctx = { timeoutMs: 2000, now: new Date('2026-10-28T20:00:00Z') };
 let srv;
-
 before(async () => {
   srv = await mockServer({
     '/api/v2/summary.json': fixture('statuspage-summary.json'),
@@ -35,23 +34,19 @@ describe('statuspage provider', () => {
     assert.equal(r.maintenances.length, 1);
     assert.equal(r.maintenances[0].startsAt, '2026-11-02T02:00:00.000Z');
   });
-
   test('component filter narrows state and incidents', async () => {
     const ok = await providers.statuspage.check({ name: 'Zoom', config: { baseUrl: srv.base, components: 'Zoom Meetings, zoom webinars' } }, ctx);
     assert.equal(ok.state, 'operational');
     assert.equal(ok.incidents.length, 0);
     assert.equal(ok.maintenances.length, 1, 'maintenance on a watched component is kept');
-
     const bad = await providers.statuspage.check({ name: 'Zoom', config: { baseUrl: srv.base, components: 'Zoom Phone' } }, ctx);
     assert.equal(bad.state, 'partial_outage');
     assert.equal(bad.incidents.length, 1);
     assert.equal(bad.maintenances.length, 0);
   });
-
   test('unknown component name is an error', async () => {
     await assert.rejects(providers.statuspage.check({ name: 'Zoom', config: { baseUrl: srv.base, components: 'Nope' } }, ctx), /No components named/);
   });
-
   test('non-JSON response is an error', async () => {
     await assert.rejects(providers.statuspage.check({ name: 'x', config: { baseUrl: `${srv.base}/html` } }, ctx), /HTTP 404|not JSON/);
   });
@@ -127,6 +122,7 @@ describe('http provider', () => {
     const r = await providers.http.check({ name: 'Wiki', config: { url: `${srv.base}/broken` } }, ctx);
     assert.equal(r.state, 'major_outage');
     assert.equal(r.incidents[0].title, 'Wiki returned HTTP 503');
+    assert.equal(r.incidents[0].url, '', 'do not publish the configured check URL');
   });
   test('expected status code', async () => {
     const r = await providers.http.check({ name: 'Wiki', config: { url: `${srv.base}/broken`, expectStatus: 503 } }, ctx);
@@ -136,10 +132,11 @@ describe('http provider', () => {
     const r = await providers.http.check({ name: 'Wiki', config: { url: `${srv.base}/slow`, degradedAfterMs: 50 } }, ctx);
     assert.equal(r.state, 'degraded');
   });
-  test('unreachable host', async () => {
-    const r = await providers.http.check({ name: 'Wiki', config: { url: 'http://127.0.0.1:1/' } }, ctx);
-    assert.equal(r.state, 'major_outage');
-    assert.match(r.summary, /Unreachable/);
+  test('blocked destination propagates a check failure rather than inventing an outage', async () => {
+    await assert.rejects(providers.http.check({ name: 'Wiki', config: { url: 'http://127.0.0.1:1/' } }, ctx), { code: 'CHECK_POLICY' });
+  });
+  test('transport timeout does not manufacture an incident', async () => {
+    await assert.rejects(providers.http.check({ name: 'Wiki', config: { url: `${srv.base}/slow` } }, { ...ctx, timeoutMs: 50 }), { code: 'CHECK_TIMEOUT' });
   });
 });
 
