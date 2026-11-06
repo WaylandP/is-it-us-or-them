@@ -3,58 +3,65 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Is it us or them?</title>
+  <meta name="description" content="A clear view of internal systems, vendor status, incidents and planned maintenance.">
+  <title>Service status · Is it us or them?</title>
+  <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%231f9d55'/%3E%3C/svg%3E" id="favicon">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='8' fill='%2309676b'/%3E%3Cpath d='M8 17h5l3-7 3 12 3-5h3' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E" id="favicon">
 </head>
 <body>
-  <div class="wrap">
-    <header class="site">
-      <a class="brand" href="/" id="brand">Is it us or them?</a>
-      <nav>
-        <a href="/api/status.txt" title="Plain-text summary for pasting into chat">Text version</a>
-        <a href="/admin">Admin</a>
-      </nav>
-    </header>
-
-    <main>
-      <section class="verdict level-unknown" id="verdict" aria-live="polite">
-        <div class="dot">…</div>
-        <div>
-          <h1>Loading…</h1>
-          <p class="detail muted">Fetching the latest status.</p>
-        </div>
-        <div class="meta"></div>
-      </section>
-
-      <section id="services-section">
-        <h2>Services <span class="count" id="services-count"></span></h2>
-        <div id="services"></div>
-      </section>
-
-      <section id="incidents-section">
-        <h2>Active incidents <span class="count" id="incidents-count"></span></h2>
-        <div class="list" id="incidents"></div>
-      </section>
-
-      <section id="maintenance-section">
-        <h2>Maintenance <span class="count" id="maintenance-count"></span></h2>
-        <div class="list" id="maintenance"></div>
-      </section>
-
-      <section id="posts-section">
-        <h2 id="posts-title">From IT</h2>
-        <div class="list" id="posts"></div>
-      </section>
-    </main>
-
-    <footer class="site">
-      <span id="footer-note"></span>
-      <a href="/api/status">JSON</a>
-      <a href="/api/status.txt">Text</a>
-      <a href="https://github.com/WaylandP/is-it-us-or-them" target="_blank" rel="noopener">Source</a>
-    </footer>
-  </div>
+  <a class="skip-link" href="#main">Skip to service status</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="Is it us or them? Home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M12 6H7a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h5M20 6h5a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3h-5M10 16h12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>
+        <span><span id="brand">Is it us or them?</span><span class="brand-caption">IT SERVICE STATUS</span></span>
+      </a>
+      <nav class="top-nav" aria-label="Page sections"><a href="#overview">Overview</a><a href="#services-section">Services</a><a href="#incidents-section">Incidents</a></nav>
+      <div class="header-tools">
+        <label class="sr-only" for="theme-select">Color theme</label><select id="theme-select" class="theme-select"><option value="system">System theme</option><option value="light">Light theme</option><option value="dark">Dark theme</option></select>
+        <a class="button secondary admin-link" href="/admin">Admin <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+  </header>
+  <main id="main" class="page" tabindex="-1">
+    <div class="page-heading" id="overview">
+      <div><p class="eyebrow">THE BIG PICTURE</p><p class="page-title">Your services. One clear answer.</p><p class="page-intro">Internal systems, external providers, and the updates that matter.</p></div>
+      <div class="page-tools"><span class="connection-label" id="connection-label">Connecting to status page</span><button class="button secondary" id="refresh-status" type="button">Refresh status</button></div>
+    </div>
+    <section id="verdict" class="verdict level-unknown" aria-labelledby="verdict-title" aria-busy="true">
+      <div class="verdict-main"><span class="verdict-symbol" id="verdict-symbol" aria-hidden="true">?</span><div><p class="eyebrow">CURRENT STATUS</p><h1 id="verdict-title">Checking service health…</h1><p class="verdict-detail" id="verdict-detail">Waiting for the first status snapshot. Nothing is assumed healthy.</p></div></div>
+      <div class="verdict-meta" id="verdict-meta">Monitoring information will appear here.</div>
+      <div class="signal-strip" id="signal-strip"><div><span class="metric-label">Internal systems</span><strong>Waiting for data</strong></div><div><span class="metric-label">External providers</span><strong>Waiting for data</strong></div><div><span class="metric-label">Monitoring coverage</span><strong>Not verified yet</strong></div></div>
+    </section>
+    <p id="status-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+    <div class="dashboard-layout">
+      <div class="primary-column">
+        <section id="incidents-section" aria-labelledby="incidents-title">
+          <div class="section-heading"><div><p class="eyebrow">WHAT NEEDS ATTENTION</p><h2 id="incidents-title">Incident updates <span id="incidents-count" class="count"></span></h2></div><a class="text-link" href="/api/status.txt">Text summary <span aria-hidden="true">↗</span></a></div>
+          <p class="cached-note" id="incidents-cached" hidden>Cached reports, not current verification. These incidents may still be ongoing.</p>
+          <div id="incidents" class="stack"><div class="loading-panel">Loading incident reports…</div></div>
+        </section>
+        <section id="services-section" aria-labelledby="services-title">
+          <div class="section-heading"><div><p class="eyebrow">YOUR TECHNOLOGY</p><h2 id="services-title">Service health <span id="services-count" class="count"></span></h2></div><span class="small muted">Ownership and check freshness</span></div>
+          <div class="service-toolbar">
+            <label class="search-field"><span class="sr-only">Search services</span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="service-search" type="search" placeholder="Find a service…" autocomplete="off"></label>
+            <div class="filter-group" role="group" aria-label="Filter services"><button data-filter="all" aria-pressed="true" type="button">All</button><button data-filter="attention" aria-pressed="false" type="button">Needs attention</button><button data-filter="internal" aria-pressed="false" type="button">Internal</button><button data-filter="vendor" aria-pressed="false" type="button">External</button></div>
+          </div>
+          <p id="filter-result" class="small muted filter-result" role="status" aria-atomic="true"></p>
+          <div id="services" class="stack"><div class="loading-panel">Loading monitored services…</div></div>
+        </section>
+      </div>
+      <aside class="support-column" aria-label="Maintenance and IT communications">
+        <section id="maintenance-section" class="panel" aria-labelledby="maintenance-title"><div class="panel-heading"><h2 id="maintenance-title">Planned maintenance</h2><span id="maintenance-count" class="count"></span></div><p class="panel-description">Active work and the next 14 days</p><p class="cached-note" id="maintenance-cached" hidden>Schedule from the last received snapshot.</p><div id="maintenance" class="stack"><p class="muted small">Loading schedule…</p></div></section>
+        <section id="posts-section" class="panel" aria-labelledby="posts-title"><div class="panel-heading"><h2 id="posts-title">From IT</h2></div><p class="panel-description">Announcements and useful updates</p><div id="posts" class="stack"><p class="muted small">Loading announcements…</p></div></section>
+        <section class="monitoring-note" aria-labelledby="monitoring-title"><h2 id="monitoring-title">A status page, not a guess.</h2><p>Unknown and stale checks stay unverified. A fresh page does not mean a fresh check.</p><p id="monitoring-cadence" class="small"></p><button id="auto-refresh" class="text-button" type="button" aria-pressed="true">Auto-refresh on</button></section>
+      </aside>
+    </div>
+    <section id="resolved-section" class="resolved-section" aria-label="Recently resolved incidents" hidden><details data-key="resolved"><summary>Recently resolved <span id="resolved-count" class="count"></span></summary><div id="resolved" class="stack"></div></details></section>
+  </main>
+  <footer class="site-footer"><div class="footer-inner"><span>Self-hosted. Open source. Yours.</span><span>Times shown in your local timezone.</span><nav aria-label="Resources"><a href="/api/status">JSON API</a><a href="https://github.com/WaylandP/is-it-us-or-them" target="_blank" rel="noopener noreferrer">Source code <span class="sr-only">(opens in a new tab)</span></a></nav></div></footer>
+  <noscript><p class="noscript">JavaScript is required for the dashboard. <a href="/api/status.txt">Read the text status report instead.</a></p></noscript>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>
