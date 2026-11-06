@@ -1,77 +1,49 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin · Is it us or them?</title>
-  <link rel="stylesheet" href="/css/style.css">
-  <meta name="robots" content="noindex">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+  <title>Administration · Is it us or them?</title><script src="/js/theme.js"></script><link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <div class="wrap">
-    <header class="site">
-      <a class="brand" href="/">← Status page</a>
-      <nav><span class="muted">Admin</span><a href="#" id="signout" hidden>Sign out</a></nav>
-    </header>
-
-    <main>
-      <section id="gate" class="card" style="margin-top:1.5rem; max-width:480px">
-        <h2 style="margin-top:0">Admin token</h2>
-        <p class="muted small">Enter the <code>ADMIN_TOKEN</code> configured for this server. If none was set, the token is printed in the server log at startup.</p>
-        <form id="gate-form" class="form-grid" style="margin-top:.8rem">
-          <label class="full">Token <input type="password" id="token" autocomplete="current-password" required></label>
-          <div class="actions full"><button class="primary" type="submit">Continue</button><span id="gate-error" class="small" style="color:var(--major)"></span></div>
-        </form>
+  <a class="skip-link" href="#main">Skip to administration</a>
+  <header class="site-header"><div class="header-inner">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M12 6H7a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h5M20 6h5a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3h-5M10 16h12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span><span id="brand">Is it us or them?</span><span class="brand-caption">ADMINISTRATION</span></span></a>
+    <div class="header-tools"><label class="sr-only" for="theme-select">Color theme</label><select id="theme-select" class="theme-select"><option value="system">System theme</option><option value="light">Light theme</option><option value="dark">Dark theme</option></select><a class="button secondary" href="/">View status page <span aria-hidden="true">↗</span></a><button id="signout" class="text-button" type="button" hidden>Sign out</button></div>
+  </div></header>
+  <main id="main" class="page admin-page" tabindex="-1">
+    <section id="gate" class="login-layout" aria-labelledby="gate-title">
+      <div class="login-intro"><p class="eyebrow">FOR YOUR IT TEAM</p><h1 id="gate-title">Keep everyone<br>in the loop.</h1><p>Manage the services you monitor, explain incidents, and make planned work visible. One place for the answers people need.</p><div class="login-features"><p><strong>Monitor with confidence.</strong><br>Keep internal systems and vendor signals distinct.</p><p><strong>Communicate clearly.</strong><br>Publish incidents, timelines and maintenance.</p><p><strong>Stay in control.</strong><br>Your deployment. Your data. No cloud account.</p></div></div>
+      <div class="panel login-panel"><span class="login-lock" aria-hidden="true">↳</span><h2>Administrator access</h2><p class="muted">Enter the admin token configured for this instance.</p><form id="gate-form"><label for="token">Admin token</label><input type="password" id="token" autocomplete="current-password" required aria-describedby="token-help"><p id="token-help" class="field-help">Use the <code>ADMIN_TOKEN</code> from your deployment. Without a configured token, check the startup log.</p><p id="gate-error" class="form-error" role="alert"></p><button class="button primary full-width" id="gate-submit" type="submit">Sign in to administration <span aria-hidden="true">→</span></button></form><p class="small muted login-security">The token is stored in this browser. Use a trusted device and sign out when finished.</p></div>
+    </section>
+    <section id="admin" hidden aria-labelledby="admin-title">
+      <div class="page-heading"><div><p class="eyebrow">CONTROL ROOM</p><h1 id="admin-title">Manage your status page.</h1><p class="page-intro">Monitor your services. Communicate what matters.</p></div><div class="page-tools"><span id="admin-updated" class="small muted">Loading your workspace…</span><button id="admin-refresh" class="button secondary" type="button">Refresh workspace</button></div></div>
+      <div id="admin-feedback" class="notice" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      <div id="admin-error" class="notice error" role="alert" hidden></div>
+      <div id="admin-overview" class="admin-overview" aria-label="Workspace summary"><div><span class="metric-label">Enabled services</span><strong>—</strong></div><div><span class="metric-label">Open incidents</span><strong>—</strong></div><div><span class="metric-label">Planned work</span><strong>—</strong></div><div><span class="metric-label">Announcements</span><strong>—</strong></div></div>
+      <div class="tabs" role="tablist" aria-label="Administration sections"><button type="button" id="tab-button-services" role="tab" data-tab="services" aria-controls="tab-services" aria-selected="true">Services <span id="tab-count-services" class="count"></span></button><button type="button" id="tab-button-incidents" role="tab" data-tab="incidents" aria-controls="tab-incidents" aria-selected="false" tabindex="-1">Incidents <span id="tab-count-incidents" class="count"></span></button><button type="button" id="tab-button-maintenance" role="tab" data-tab="maintenance" aria-controls="tab-maintenance" aria-selected="false" tabindex="-1">Maintenance</button><button type="button" id="tab-button-posts" role="tab" data-tab="posts" aria-controls="tab-posts" aria-selected="false" tabindex="-1">Announcements</button></div>
+      <section id="tab-services" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-services">
+        <div class="workspace-heading"><div><h2>Monitored services</h2><p>Add checks, choose ownership, and keep the public page current.</p></div><button class="button primary" id="add-service" type="button">+ Add service</button></div>
+        <label class="search-field admin-search"><span class="sr-only">Search configured services</span><input id="admin-search" type="search" placeholder="Search services or groups…" autocomplete="off"></label>
+        <div class="table-wrap"><table id="services-table"><caption class="sr-only">Configured services and monitoring status</caption><thead><tr><th scope="col">Service</th><th scope="col">Source</th><th scope="col">Ownership</th><th scope="col">Latest status</th><th scope="col">Actions</th></tr></thead><tbody><tr><td colspan="5">Loading services…</td></tr></tbody></table></div>
       </section>
-
-      <section id="admin" hidden>
-        <div class="tabs" role="tablist">
-          <button class="active" data-tab="services">Services</button>
-          <button data-tab="maintenance">Maintenance</button>
-          <button data-tab="posts">Announcements</button>
-        </div>
-
-        <div class="tabpane active" id="tab-services">
-          <div class="actions" style="margin:0 0 1rem; justify-content:space-between">
-            <p class="muted small" style="margin:0">Each service is read from a feed provider. Add the vendors and internal systems people actually ask about.</p>
-            <button class="primary" id="add-service">+ Add service</button>
-          </div>
-          <div class="card table-wrap"><table id="services-table"><thead><tr><th>Order</th><th>Name</th><th>Provider</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
-        </div>
-
-        <div class="tabpane" id="tab-maintenance">
-          <div class="actions" style="margin:0 0 1rem; justify-content:space-between">
-            <p class="muted small" style="margin:0">Scheduled windows appear on the status page two weeks ahead and mark affected services as "under maintenance" while active.</p>
-            <button class="primary" id="add-maintenance">+ Schedule maintenance</button>
-          </div>
-          <div class="card table-wrap"><table id="maintenance-table"><thead><tr><th>When</th><th>Title</th><th>Services</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
-        </div>
-
-        <div class="tabpane" id="tab-posts">
-          <div class="actions" style="margin:0 0 1rem; justify-content:space-between">
-            <p class="muted small" style="margin:0">Announcements are plain updates. Incidents (warning / critical) mark affected services as having an internal problem until resolved.</p>
-            <button class="primary" id="add-post">+ New post</button>
-          </div>
-          <div class="card table-wrap"><table id="posts-table"><thead><tr><th>Type</th><th>Title</th><th>Services</th><th>Posted</th><th></th></tr></thead><tbody></tbody></table></div>
-        </div>
+      <section id="tab-incidents" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-incidents" hidden>
+        <div class="workspace-heading"><div><h2>IT-managed incidents</h2><p>Publish internal issues and keep a clear timeline. Vendor incidents come from feeds.</p></div><button class="button primary" id="add-incident" type="button">+ Report incident</button></div>
+        <div class="table-wrap"><table id="incidents-table"><caption class="sr-only">Internal incident reports</caption><thead><tr><th scope="col">Incident</th><th scope="col">Affected services</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div>
       </section>
-    </main>
-  </div>
-
-  <dialog id="dialog">
-    <form id="dialog-form" method="dialog">
-      <h2 id="dialog-title" style="margin-top:0"></h2>
-      <div id="dialog-body"></div>
-      <div id="dialog-result"></div>
-      <div class="actions">
-        <button class="primary" type="submit" id="dialog-save">Save</button>
-        <button type="button" id="dialog-test" hidden>Test feed</button>
-        <button type="button" id="dialog-cancel">Cancel</button>
-        <span id="dialog-error" class="small" style="color:var(--major)"></span>
-      </div>
-    </form>
-  </dialog>
-
+      <section id="tab-maintenance" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-maintenance" hidden>
+        <div class="workspace-heading"><div><h2>Planned maintenance</h2><p>Schedule work, tell people what to expect, and mark completion.</p></div><button class="button primary" id="add-maintenance" type="button">+ Schedule maintenance</button></div>
+        <div class="table-wrap"><table id="maintenance-table"><caption class="sr-only">IT maintenance windows</caption><thead><tr><th scope="col">Maintenance</th><th scope="col">Window (local time)</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section id="tab-posts" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-posts" hidden>
+        <div class="workspace-heading"><div><h2>Announcements</h2><p>Share useful updates without marking a service as broken.</p></div><button class="button primary" id="add-post" type="button">+ New announcement</button></div>
+        <div class="table-wrap"><table id="posts-table"><caption class="sr-only">IT announcements</caption><thead><tr><th scope="col">Announcement</th><th scope="col">Published</th><th scope="col">Visibility</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div>
+      </section>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="footer-inner"><span>Your IT team, clearly connected.</span><span>Times shown in your local timezone.</span><a href="/">Public status page</a></div></footer>
+  <dialog id="dialog" aria-labelledby="dialog-title"><form id="dialog-form"><div class="dialog-header"><div><p class="eyebrow" id="dialog-kicker">WORKSPACE</p><h2 id="dialog-title" tabindex="-1"></h2></div><button type="button" id="dialog-close" class="icon-button" aria-label="Close dialog">×</button></div><div class="dialog-scroll"><div id="dialog-body"></div><div id="dialog-result" role="status" aria-live="polite" aria-atomic="true"></div><p id="dialog-error" class="form-error" role="alert"></p></div><div class="dialog-footer"><button type="button" id="dialog-delete" class="button danger" hidden>Delete</button><button type="button" id="dialog-test" class="button secondary" hidden>Test feed</button><span class="button-spacer"></span><button type="button" id="dialog-cancel" class="button secondary">Cancel</button><button type="submit" id="dialog-save" class="button primary">Save</button></div></form></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description"><form id="confirm-form" method="dialog"><div class="dialog-header"><h2 id="confirm-title">Delete this item?</h2></div><div class="dialog-scroll"><p id="confirm-description"></p><p class="small muted">This cannot be undone.</p></div><div class="dialog-footer"><button value="cancel" class="button secondary" autofocus>Keep item</button><button value="delete" class="button destructive">Delete permanently</button></div></form></dialog>
+  <noscript><p class="noscript">Administration requires JavaScript. The <a href="/api/status.txt">text status report</a> is still available.</p></noscript>
   <script type="module" src="/js/admin.js"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@
 **Your IT status page. One question. A clearer answer.**
 
 [![CI](https://github.com/WaylandP/is-it-us-or-them/actions/workflows/ci.yml/badge.svg)](https://github.com/WaylandP/is-it-us-or-them/actions/workflows/ci.yml)
+[![UI checks](https://github.com/WaylandP/is-it-us-or-them/actions/workflows/ui.yml/badge.svg)](https://github.com/WaylandP/is-it-us-or-them/actions/workflows/ui.yml)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20.10%2B-339933.svg)](package.json)
 
@@ -12,7 +13,9 @@
 - **Lightweight:** Express 5 and vanilla JavaScript; no frontend build or external database.
 - **Designed for IT:** service ownership, incident timelines, maintenance windows, and a clear status summary.
 
-![Public status dashboard showing the verdict, services and incidents](docs/screenshot.png)
+![Redesigned public dashboard: a clear verdict, incident updates, grouped service health, maintenance and announcements](docs/screenshots/dashboard.webp)
+
+*Actual frontend rendering with illustrative demo data, not live vendor status. The preview is cropped for the README. [Screenshot reproduction](docs/screenshots/README.md) · [UX research and design decisions](docs/UI_UX_RESEARCH.md).*
 
 > [!IMPORTANT]
 > This is an early-stage project (package version `0.1.0`). Review [Security](SECURITY.md) before exposing it outside a trusted network. Upgrading an existing installation? Read the [monitoring migration notes](docs/MONITORING_SECURITY.md#upgrade-checklist): private checks require explicit approval, service configuration reads require authentication, and outbound HTTP proxies are not supported by the hardened transport.
@@ -32,15 +35,17 @@ An unreadable, blocked, failed, or stale check is **not** proof of health or a v
 
 ## What works today
 
-- **Service dashboard** with groups, ownership, service cards, light/dark themes and mobile layouts.
+- **Incident-first dashboard** with a clear verdict, internal/external signals, monitoring coverage and readable updates.
+- **Searchable service inventory:** grouped services, internal/external/needs-attention filters and expandable source, timestamp and error details.
+- **Shared light, dark and system themes**, responsive public/admin layouts, labeled controls and keyboard-operated tabs and dialogs.
 - **Six check types:** Atlassian Statuspage, Slack, Google Workspace/Cloud, RSS/Atom, HTTP and manual.
 - **Incident posts** with severity, affected services, resolution, pinned messages and timeline updates.
 - **Maintenance scheduling** with upcoming and active windows; upcoming windows appear up to 14 days ahead.
-- **Admin interface** for adding, editing, testing, disabling, refreshing and removing services.
+- **Dedicated admin workflows** for Services, Incidents, Maintenance and Announcements, including feed testing and manual service state changes.
 - **Plain-text status** at `/api/status.txt` and an optional verified Slack slash command.
-- **Freshness enforcement** across JSON, text, Slack and the public dashboard. Cached/offline data stays visibly unverified.
+- **Freshness enforcement** across JSON, text, Slack and the public dashboard. Cached/offline data stays visibly unverified, even when auto-refresh is paused.
 - **Guarded monitoring requests** with destination validation, DNS pinning, redirect checks and response limits.
-- **Docker and Compose** deployment, local JSON persistence and automated tests.
+- **Docker and Compose** deployment, local JSON persistence and automated backend/frontend tests.
 
 ## Quick start: Docker Compose
 
@@ -78,7 +83,7 @@ Keep the token available for admin login; do not share it in logs or screenshots
 
 ## Configure your status page
 
-Open `/admin`, enter the configured token, then add a service, use **Test feed**, and save. Choose **Vendor** for external services or **Internal** for systems your team manages.
+Open `/admin`, enter the configured token, then use **Services → Add service**, choose a source, use **Test feed**, and save. Choose **Vendor** for external services or **Internal** for systems your team manages. Feed tests display the actual reported state; a completed request is not automatically a healthy result.
 
 | Provider | Intended use |
 | --- | --- |
@@ -89,7 +94,7 @@ Open `/admin`, enter the configured token, then add a service, use **Test feed**
 | `http` | Observed HTTP status and latency; DNS/TLS/timeouts or policy failures leave health unknown |
 | `manual` | IT-declared state, not an independent probe of the underlying service |
 
-Use **Maintenance** for planned work and **Announcements** for messages or incidents with updates. Native Microsoft 365 and Teams integrations are not implemented; see [Roadmap](docs/ROADMAP.md) for planned work, not promises.
+Use **Incidents** for internal problems and timeline updates, **Maintenance** for planned work, and **Announcements** for information that should not mark services as broken. Service enable/disable and deletion are available from **Edit**; deletion requires confirmation. Native Microsoft 365 and Teams integrations are not implemented; see [Roadmap](docs/ROADMAP.md) for planned work, not promises.
 
 ## Configuration
 
@@ -132,6 +137,7 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:3000/api/services
 
 ```text
 public/                 Static dashboard/admin interface
+public/js/ui.js          Shared presentation helpers and safe component markup
 src/providers/           Provider adapters
 src/check-network.js     Bounded, destination-validated check transport
 src/freshness.js         Observation age and expiry
@@ -141,6 +147,7 @@ src/snapshot.js          JSON snapshot and text report
 src/routes/              API endpoints
 src/store.js             Local JSON persistence
 test/                    node:test suites and sanitized fixtures
+scripts/ui-check.py      Optional fixture-driven Chromium UI checks
 ```
 
 ```bash
@@ -149,7 +156,15 @@ npm test
 npm run dev
 ```
 
-Read [Architecture](docs/ARCHITECTURE.md), [Deployment](docs/DEPLOYMENT.md), [research and threat model](docs/MONITORING_SECURITY.md), [Contributing](CONTRIBUTING.md), and [Security](SECURITY.md).
+Browser checks are test-only and do not add a runtime dependency or frontend build:
+
+```bash
+python -m pip install -r scripts/requirements-ui.txt
+python -m playwright install --with-deps chromium
+python scripts/ui-check.py --output ui-artifacts
+```
+
+Read [Architecture](docs/ARCHITECTURE.md), [Deployment](docs/DEPLOYMENT.md), [monitoring research](docs/MONITORING_SECURITY.md), [UI/UX research](docs/UI_UX_RESEARCH.md), [Contributing](CONTRIBUTING.md), and [Security](SECURITY.md).
 
 ## Known limitations
 
@@ -160,6 +175,7 @@ Read [Architecture](docs/ARCHITECTURE.md), [Deployment](docs/DEPLOYMENT.md), [re
 - HTTP/HTTPS/ALL proxy environment variables are rejected. Proxy-dependent deployments need a reviewed networking solution before upgrading.
 - The admin bearer token is still stored in browser local storage. Use a trusted browser, HTTPS and VPN/SSO protection.
 - No built-in multiuser roles, SSO, alert delivery, or Teams integration. This hardening is not a penetration-test certification.
+- UI tests cover Chromium with simulated responses. Full screen-reader, cross-browser and WCAG conformance audits remain outstanding.
 
 ## Contribute
 
@@ -169,7 +185,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) for provider and test guidance. For vuln
 
 Created and maintained by [Wayland Pearce (@WaylandP)](https://github.com/WaylandP), with contributions recorded in the repository's Git history.
 
-**ChatGPT (OpenAI)** has contributed AI-assisted research, implementation, regression tests, security hardening, monitoring-freshness improvements, and documentation under the maintainer's direction. Earlier contributor credits remain preserved in Git history.
+**ChatGPT (OpenAI)** has contributed AI-assisted research, implementation, regression tests, security hardening, monitoring-freshness improvements, UI/UX design and documentation under the maintainer's direction. Earlier contributor credits remain preserved in Git history.
 
 AI assistance is acknowledged transparently; project decisions, review, and releases remain the responsibility of the human maintainers. This acknowledgment does not imply sponsorship or endorsement by OpenAI.
 

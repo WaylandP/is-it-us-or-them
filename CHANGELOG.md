@@ -4,6 +4,17 @@ Notable changes to Is It Us or Them? are recorded here. Format inspired by [Keep
 
 ## Unreleased
 
+### Interface
+- Redesign the public dashboard and administration with shared light/dark/system themes, consistent typography, status symbols and responsive layouts.
+- Put incident impact and monitoring freshness ahead of routine notices; add grouped service search, ownership/attention filters and expandable check details.
+- Separate Services, Incidents, Maintenance and Announcements in administration without changing the API or datastore.
+- Improve labeled forms, keyboard tabs, modal focus, destructive confirmation, pending/error handling and provider-switch draft retention.
+- Preserve cached/offline warnings across the full public page; allow auto-refresh to be paused without disabling observation expiry.
+- Report the actual Test feed result rather than treating every successful request as healthy.
+- Add 33 frontend helper/contrast/markup checks and reproducible Chromium workflow checks with screenshot artifacts.
+- Replace the old README screenshot with an actual capture of the redesigned frontend using clearly identified illustrative data.
+- Document primary-source research, design decisions, verification boundaries and remaining accessibility validation.
+
 ### Security
 - Route all built-in monitoring traffic through validated, DNS-pinned HTTP/HTTPS connections; validate redirects and preserve TLS identity.
 - Deny metadata/special ranges and require exact-origin/CIDR operator approval for private and nonstandard-port checks.
