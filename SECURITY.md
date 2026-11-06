@@ -4,30 +4,30 @@
 
 **Do not disclose exploit details, credentials or sensitive logs in a public issue.**
 
-If GitHub private vulnerability reporting is available on the repository's **Security** tab, use it. If it is not available, open a minimal public issue asking the maintainer to arrange a private contact channel **without including sensitive technical details**.
+Use GitHub private vulnerability reporting on the repository's Security tab when available. Otherwise open a minimal issue requesting a private contact channel, without sensitive technical details. There is no guaranteed response SLA at this stage.
 
-There is no guaranteed response SLA at this stage. Maintainers will triage reports as availability permits.
+## Deployment model
 
-## Deployment model and current limitations
+This early-stage application is intended for a trusted IT team. Use VPN, firewall or identity-aware reverse-proxy protection when operational data is private. Do not treat these controls as certification for unrestricted internet exposure.
 
-This is an early-stage, self-hosted application. Treat it as an **internal-only service** unless you have configured and reviewed appropriate external access controls.
+- **Public reads:** `/api/status`, `/api/status.txt`, `/api/posts`, `/api/maintenance` and provider descriptors remain unauthenticated. Service names, descriptions, declared status-page links and announcements can be sensitive. Service configuration GET/HEAD under `/api/services` now requires the admin token.
+- **Admin authentication:** writes and configuration reads require a unique, high-entropy bearer token. Compose requires a nonempty value. A direct Node startup without a token generates one and prints it to logs. Protect logs and rotate secrets after exposure.
+- **Browser storage:** the admin UI still uses local storage. Use a trusted browser and HTTPS; clear site storage after shared-computer use. This change does not introduce secure sessions or multiuser roles.
+- **Outbound checks:** all built-in providers use a guarded transport with resolved-IP validation, connection pinning, redirect validation, TLS verification, deadlines and byte limits. Private/nonstandard-port targets need exact-origin/CIDR approval in CHECK_ALLOWED_TARGETS. Metadata and prohibited ranges remain denied. Keep approvals narrow and enforce network egress restrictions.
+- **Proxy compatibility:** HTTP_PROXY, HTTPS_PROXY and ALL_PROXY are deliberately unsupported, including lowercase variants; startup fails instead of silently routing around policy. Review [migration guidance](docs/MONITORING_SECURITY.md#upgrade-checklist).
+- **Response protections:** CSP restricts scripts to the same origin, embedding is denied, MIME sniffing is disabled and referrers are suppressed. Inline styles remain permitted for existing UI components. These are defense in depth, not substitutes for safe rendering.
+- **Slack:** set SLACK_SIGNING_SECRET when exposing slash commands. Without it, requests are not signature-verified.
+- **Storage:** data.json and backups are unencrypted. Protect the volume, configuration and backups. No schema/data migration is introduced by monitoring hardening.
+- **TLS:** the application serves HTTP; terminate HTTPS at a reviewed reverse proxy. Do not disable certificate validation on outbound checks; use a properly mounted CA trust bundle for private CAs.
+- **Monitoring:** stale/failed results do not establish healthy service status. Results live in memory; recent monitoring cannot guarantee a vendor feed is complete or semantically accurate.
+- **Privacy:** no mandatory telemetry. Configured monitoring endpoints and optional integrations still involve network communication.
 
-- **Unauthenticated reads:** `/api/status`, `/api/services`, `/api/posts` and `/api/maintenance` can reveal service names, service configuration URLs and internal announcements to any reachable client. Protect the entire application behind a VPN, firewall or identity-aware reverse proxy when it contains internal data.
-- **Administrative authentication:** writes require a bearer `ADMIN_TOKEN`. Use a unique, high-entropy secret. Compose rejects missing or empty tokens; a direct Node startup without a token generates one and prints it to logs. Rotate secrets after suspected exposure.
-- **Browser storage:** the admin UI stores the token in local storage. Only administer the instance through a trusted browser over HTTPS or a protected local connection. Clear site storage after using a shared computer.
-- **SSRF risk:** administrators can configure URLs that the server fetches, and redirects are followed. URL syntax validation is **not** an SSRF defense. Restrict admin access and container egress to approved destinations; don't allow untrusted administrators.
-- **Slack:** set `SLACK_SIGNING_SECRET` if enabling slash commands. Without it, requests are not signature-verified. Avoid publishing an unsigned endpoint.
-- **Storage:** `data.json` is unencrypted. Protect the container volume and backups and limit file-system access.
-- **TLS:** the app serves HTTP. Put it behind a correctly configured HTTPS reverse proxy when accessed outside localhost.
-- **Monitoring accuracy:** an unavailable feed should be presented as uncertain. Polling states are in memory, and automatic stale-age enforcement is not yet implemented.
-- **No telemetry:** the application itself does not require an external analytics or telemetry account. Configured vendor checks and optional Slack integration still make outbound requests.
+## Known boundaries
 
-See [Self-hosting and operations](docs/DEPLOYMENT.md) for safer port binding, backup and restore guidance.
+An approved origin permits all paths within that origin and approved addresses. An allowed remote service could itself act as a proxy. Network routing, DNS infrastructure, host compromise, deliberate operator over-approval, public incident content and authenticated-admin misuse are not eliminated by application URL validation.
+
+See [Monitoring research and threat model](docs/MONITORING_SECURITY.md) and [Deployment](docs/DEPLOYMENT.md). Further work includes stronger admin sessions, rate limiting, durable audit trails and deeper provider-schema validation.
 
 ## Supported versions
 
-Security fixes are currently developed against the latest `main` branch. There is no published support schedule or long-term-support release.
-
-## Maintainer security checklist
-
-Before broad public exposure, prioritize SSRF protection, review unauthenticated configuration endpoints, consider stronger admin sessions, add deployment threat-model tests, and validate HTTP response security headers.
+Security fixes are currently developed against the latest main branch. There is no published long-term-support schedule.

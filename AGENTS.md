@@ -1,14 +1,13 @@
 # Repository working agreements
 
-This project is an open-source, self-hosted IT service status tool, not a hosted SaaS service. Keep deployment, dependency footprint and data ownership straightforward.
+This is an open-source, self-hosted IT status tool, not a hosted SaaS product. Preserve simple deployment, data ownership and a small dependency footprint.
 
-- Before changes, inspect the latest code and tests; do not rely on README claims alone.
-- Core status rules live in `src/verdict.js` and `src/snapshot.js`. Unknown, stale, unresponsive and not-yet-checked statuses must not be represented as verified healthy.
-- Provider adapters are under `src/providers/`. Follow their normalized response contract and include mocked tests.
-- Protect API writes and secrets; treat configurable HTTP URLs as SSRF-sensitive.
-- Public status and administration are distinct trust boundaries. Remember public GETs are currently unauthenticated.
-- UI changes must work with vanilla JS/CSS, light/dark themes, mobile layouts and accessible interactions.
-- Prefer focused, reviewed PRs over broad rewrites. Keep documentation accurate, update tests and verify CI before claiming success.
-- Never deploy, merge significant work, delete history or perform destructive repository maintenance without authorization.
+- Inspect current code, tests and relevant docs before changes.
+- Status rules live in src/verdict.js, src/freshness.js and src/snapshot.js. Never represent unknown, stale or not-yet-checked evidence as verified healthy. Internal declarations must not erase independent vendor evidence.
+- All network providers must use src/providers/util.js and the guarded transport in src/check-network.js. Do not add direct fetch calls, blanket private-network switches, insecure TLS options or production test bypasses.
+- Public status and administration are separate boundaries. Configuration reads under /api/services and all administrative writes require authentication. Public status/posts/maintenance still need appropriate deployment access control.
+- UI changes must fit vanilla JS/CSS, both themes, phone/desktop layouts and accessible interaction. Cached/offline states must remain unverified until recovery.
+- Prefer focused PRs. Keep docs accurate and add regression tests. Never claim execution, CI, deployment or visual verification without evidence.
+- Do not deploy, merge significant work, delete history or perform destructive maintenance without authorization.
 
-See `CONTRIBUTING.md`, `SECURITY.md`, `docs/ARCHITECTURE.md` and `docs/DEPLOYMENT.md` for more detail.
+Read CONTRIBUTING.md, SECURITY.md, docs/ARCHITECTURE.md, docs/DEPLOYMENT.md and docs/MONITORING_SECURITY.md. Preserve the license and other contributors' work.

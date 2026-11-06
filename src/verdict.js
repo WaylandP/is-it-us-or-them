@@ -1,4 +1,5 @@
 import { worst, isIssue, STATE_LABELS } from './states.js';
+import { observedStatus } from './freshness.js';
 
 const POST_STATE = { warning: 'degraded', critical: 'major_outage' };
 
@@ -18,73 +19,47 @@ export function isOpenIncidentPost(p) {
   return !p.resolved && (p.severity === 'warning' || p.severity === 'critical');
 }
 
-/**
- * Combine vendor feed statuses with our own maintenance calendar and
- * announcements, and decide: is it us, or is it them?
- */
-export function computeVerdict({ services, statuses, maintenance, posts, now = new Date() }) {
+/** Combine independent internal/external evidence without hiding monitoring gaps. */
+export function computeVerdict({ services, statuses, maintenance, posts, now = new Date(), staleAfterSeconds = 180 }) {
   const activeMaint = maintenance.filter((m) => maintenancePhase(m, now) === 'active');
   const openPosts = posts.filter(isOpenIncidentPost);
-
-  const rows = services
-    .filter((s) => s.enabled !== false)
-    .map((s) => {
-      const st = statuses.get(s.id) || null;
-      const vendorState = st?.state || 'unknown';
-      const maint = activeMaint.filter((m) => m.services.includes(s.id));
-      const post = openPosts.filter((p) => p.services.includes(s.id));
-
-      // Our own signals override what the feed says for display purposes.
-      let effective = vendorState;
-      let reason = null;
-      if (post.length) {
-        effective = worst(post.map((p) => POST_STATE[p.severity]));
-        reason = { kind: 'post', title: post[0].title, id: post[0].id };
-      } else if (maint.length) {
-        effective = 'maintenance';
-        reason = { kind: 'maintenance', title: maint[0].title, id: maint[0].id };
-      }
-
-      const ours = Boolean(post.length || maint.length) || (s.owner === 'internal' && isIssue(vendorState));
-      // If IT has declared maintenance or an incident for a service, it's ours, whatever the vendor says.
-      const theirs = s.owner !== 'internal' && isIssue(vendorState) && !post.length && !maint.length;
-
-      return {
-        id: s.id,
-        name: s.name,
-        group: s.group || '',
-        owner: s.owner || 'vendor',
-        provider: s.provider,
-        description: s.description || '',
-        statusPageUrl: s.statusPageUrl || '',
-        order: s.order ?? 0,
-        state: effective,
-        vendorState,
-        label: STATE_LABELS[effective] || effective,
-        summary: st?.summary || (st ? '' : 'Waiting for first check…'),
-        incidents: st?.incidents || [],
-        vendorMaintenance: st?.maintenances || [],
-        checkedAt: st?.checkedAt || null,
-        since: st?.since || null,
-        error: st?.error || null,
-        lastKnown: st?.lastKnown || null,
-        latencyMs: st?.latencyMs ?? null,
-        reason,
-        ours,
-        theirs,
-      };
-    })
-    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const rows = services.filter((s) => s.enabled !== false).map((s) => {
+    const st = observedStatus(statuses.get(s.id), now, staleAfterSeconds);
+    const vendorState = st.state;
+    const maint = activeMaint.filter((m) => m.services.includes(s.id));
+    const post = openPosts.filter((p) => p.services.includes(s.id));
+    let effective = vendorState;
+    let reason = null;
+    if (post.length) {
+      effective = worst([vendorState, ...post.map((p) => POST_STATE[p.severity])]);
+      reason = { kind: 'post', title: post[0].title, id: post[0].id };
+    } else if (maint.length) {
+      effective = worst([vendorState, 'maintenance']);
+      reason = { kind: 'maintenance', title: maint[0].title, id: maint[0].id };
+    }
+    const ours = Boolean(post.length || maint.length) || (s.owner === 'internal' && isIssue(vendorState));
+    // An internal announcement cannot erase independent, current vendor evidence.
+    const theirs = s.owner !== 'internal' && isIssue(vendorState);
+    return {
+      id: s.id, name: s.name, group: s.group || '', owner: s.owner || 'vendor', provider: s.provider,
+      description: s.description || '', statusPageUrl: s.statusPageUrl || '', order: s.order ?? 0,
+      state: effective, vendorState,
+      label: effective === 'unknown' && st.freshness === 'stale' ? 'Stale data' : STATE_LABELS[effective] || effective,
+      summary: st.summary, incidents: st.incidents, vendorMaintenance: st.maintenances,
+      checkedAt: st.checkedAt, since: st.since, error: st.error || null, errorCode: st.errorCode || null,
+      lastKnown: st.lastKnown, lastSuccessfulAt: st.lastSuccessfulAt,
+      freshness: st.freshness, ageSeconds: st.ageSeconds, expiresAt: st.expiresAt,
+      latencyMs: st.latencyMs ?? null, reason, ours, theirs,
+    };
+  }).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
 
   const them = rows.filter((r) => r.theirs);
   const us = rows.filter((r) => r.ours);
-  let level = worst(rows.map((r) => r.state));
-  const unknown = rows.filter((r) => r.state === 'unknown');
-
-  // Internal incident posts not tied to a specific tracked service still count as "us".
-  const generalPosts = openPosts.filter((p) => !p.services.length || !p.services.some((id) => rows.find((r) => r.id === id)));
-  const generalMaint = activeMaint.filter((m) => !m.services.length || !m.services.some((id) => rows.find((r) => r.id === id)));
-
+  // Count missing monitoring evidence even when IT has declared an incident.
+  const unknown = rows.filter((r) => r.freshness !== 'fresh');
+  const generalPosts = openPosts.filter((p) => !p.services.length || !p.services.some((id) => rows.some((r) => r.id === id)));
+  const generalMaint = activeMaint.filter((m) => !m.services.length || !m.services.some((id) => rows.some((r) => r.id === id)));
+  let level = worst([...rows.map((r) => r.state), ...generalPosts.map((p) => POST_STATE[p.severity]), ...generalMaint.map(() => 'maintenance')]);
   let who;
   if (them.length && (us.length || generalPosts.length || generalMaint.length)) who = 'both';
   else if (them.length) who = 'them';
@@ -92,8 +67,6 @@ export function computeVerdict({ services, statuses, maintenance, posts, now = n
   else if (!rows.length || unknown.length) who = 'unknown';
   else if (rows.some((r) => r.state === 'maintenance')) who = 'maintenance';
   else who = 'none';
-
-  // An unreadable or not-yet-checked feed is not evidence of a healthy system.
   if (who === 'unknown') level = 'unknown';
 
   const names = (list) => list.map((r) => r.name);
@@ -115,7 +88,7 @@ export function computeVerdict({ services, statuses, maintenance, posts, now = n
     case 'unknown':
       headline = rows.length ? 'Status uncertain.' : 'No services configured.';
       detail = rows.length
-        ? `No known incidents, but ${unknown.length} service${unknown.length === 1 ? '' : 's'} ${unknown.length === 1 ? 'has' : 'have'} unknown status. Review feed errors and check timestamps.`
+        ? `Current health is unverified: ${unknown.length} service${unknown.length === 1 ? '' : 's'} ${unknown.length === 1 ? 'has' : 'have'} unknown status. Review feed errors and check timestamps.`
         : 'Nothing is being tracked yet. Add services in the admin page.';
       break;
     case 'maintenance': {
@@ -126,25 +99,17 @@ export function computeVerdict({ services, statuses, maintenance, posts, now = n
     }
     default:
       headline = 'All clear.';
-      detail = `All ${rows.length} tracked service${rows.length === 1 ? '' : 's'} look operational.`;
+      detail = `All ${rows.length} tracked service${rows.length === 1 ? '' : 's'} have current operational reports.`;
   }
-
+  if (unknown.length && who !== 'unknown') detail += ` Monitoring coverage is incomplete for ${unknown.length} service${unknown.length === 1 ? '' : 's'}.`;
   return {
-    who,
-    level,
-    headline,
-    detail,
-    them: names(them),
-    us: names(us),
+    who, level, headline, detail, them: names(them), us: names(us),
     counts: {
-      total: rows.length,
-      issues: rows.filter((r) => isIssue(r.state)).length,
+      total: rows.length, issues: rows.filter((r) => isIssue(r.state)).length,
       maintenance: rows.filter((r) => r.state === 'maintenance').length,
-      unknown: unknown.length,
+      unknown: unknown.length, stale: rows.filter((r) => r.freshness === 'stale').length,
     },
-    services: rows,
-    activeMaintenance: activeMaint,
-    openPosts,
+    services: rows, activeMaintenance: activeMaint, openPosts,
   };
 }
 

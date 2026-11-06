@@ -67,6 +67,10 @@ describe('auth', () => {
     assert.equal(j.verdict.headline, 'No services configured.');
     assert.match(j.verdict.detail, /Nothing is being tracked yet/);
   });
+  test('service configuration requires admin authentication, including HEAD', async () => {
+    for (const method of ['GET', 'HEAD']) assert.equal((await fetch(`${base}/api/services`, { method })).status, 401);
+    assert.equal((await call('GET', '/api/services')).status, 200);
+  });
 });
 
 describe('services', () => {
@@ -109,16 +113,13 @@ describe('services', () => {
     assert.equal(zoom.group, 'Vendors');
     assert.equal(zoom.statusPageUrl, 'https://status.zoom.us');
 
-    // The first poll is kicked off on create; refresh forces a synchronous one.
     const ref = await call('POST', `/api/services/${zoom.id}/refresh`);
     assert.equal(ref.json.status.state, 'partial_outage');
-
     const snap = (await call('GET', '/api/status')).json;
     assert.equal(snap.verdict.who, 'them');
     assert.deepEqual(snap.verdict.them, ['Zoom']);
     assert.equal(snap.incidents.length, 1);
     assert.equal(snap.maintenance.vendor.length, 1);
-
     const txt = (await call('GET', '/api/status.txt')).text;
     assert.match(txt, /It's them\./);
     assert.match(txt, /Zoom — Partial outage/);
@@ -182,33 +183,29 @@ describe('services', () => {
 });
 
 describe('maintenance', () => {
-  test('active window marks the service as maintenance and "us"', async () => {
+  test('active internal maintenance coexists with an independent vendor incident', async () => {
     const zoom = (await call('GET', '/api/services')).json[0];
     const now = Date.now();
     const bad = await call('POST', '/api/maintenance', { title: 'x', startsAt: new Date(now).toISOString(), endsAt: new Date(now - 1000).toISOString() });
     assert.equal(bad.status, 400);
     const unknownSvc = await call('POST', '/api/maintenance', { title: 'x', startsAt: new Date(now).toISOString(), services: ['nope'] });
     assert.equal(unknownSvc.status, 400);
-
     const m = await call('POST', '/api/maintenance', {
-      title: 'Zoom SSO change',
-      services: [zoom.id],
-      startsAt: new Date(now - 60e3).toISOString(),
-      endsAt: new Date(now + 3600e3).toISOString(),
+      title: 'Zoom SSO change', services: [zoom.id],
+      startsAt: new Date(now - 60e3).toISOString(), endsAt: new Date(now + 3600e3).toISOString(),
     });
     assert.equal(m.status, 201);
     let snap = (await call('GET', '/api/status')).json;
     assert.equal(snap.maintenance.active.length, 1);
     assert.deepEqual(snap.maintenance.active[0].serviceNames, ['Zoom Video']);
-    assert.equal(snap.services[0].state, 'maintenance');
-    assert.equal(snap.verdict.who, 'us');
-
+    assert.equal(snap.services[0].state, 'partial_outage');
+    assert.equal(snap.services[0].reason.kind, 'maintenance');
+    assert.equal(snap.verdict.who, 'both');
     const done = await call('PUT', `/api/maintenance/${m.json.id}`, { status: 'completed' });
     assert.equal(done.json.status, 'completed');
     snap = (await call('GET', '/api/status')).json;
     assert.equal(snap.maintenance.active.length, 0);
     assert.equal(snap.verdict.who, 'them');
-
     assert.equal((await call('DELETE', `/api/maintenance/${m.json.id}`)).status, 204);
     assert.equal((await call('DELETE', `/api/maintenance/${m.json.id}`)).status, 404);
   });
@@ -229,7 +226,6 @@ describe('posts', () => {
     const info = await call('POST', '/api/posts', { title: 'New VPN client', body: 'Install from Self Service. https://example.com', pinned: true });
     assert.equal(info.status, 201);
     assert.equal(info.json.severity, 'info');
-
     const inc = await call('POST', '/api/posts', { title: 'Zoom SSO broken', severity: 'critical', services: [zoom.id] });
     assert.equal(inc.status, 201);
     let snap = (await call('GET', '/api/status')).json;
@@ -237,23 +233,19 @@ describe('posts', () => {
     assert.equal(snap.posts.open[0].title, 'New VPN client', 'pinned first');
     assert.equal(snap.services[0].state, 'major_outage');
     assert.equal(snap.services[0].reason.kind, 'post');
-    assert.equal(snap.verdict.who, 'us', 'our incident overrides the vendor signal');
-
+    assert.equal(snap.verdict.who, 'both', 'independent vendor evidence must remain visible');
     const up = await call('POST', `/api/posts/${inc.json.id}/updates`, { body: 'Fixed the IdP config.', resolved: true });
     assert.equal(up.status, 201);
     assert.equal(up.json.updates.length, 1);
     assert.equal(up.json.resolved, true);
     assert.ok(up.json.resolvedAt);
-
     snap = (await call('GET', '/api/status')).json;
     assert.equal(snap.posts.open.length, 1);
     assert.equal(snap.posts.recent.length, 1);
     assert.equal(snap.verdict.who, 'them');
-
     const reopened = await call('PUT', `/api/posts/${inc.json.id}`, { resolved: false });
     assert.equal(reopened.json.resolved, false);
     assert.equal(reopened.json.resolvedAt, null);
-
     assert.equal((await call('POST', `/api/posts/${inc.json.id}/updates`, { body: '' })).status, 400);
     assert.equal((await call('DELETE', `/api/posts/${inc.json.id}`)).status, 204);
     assert.equal((await call('DELETE', `/api/posts/${info.json.id}`)).status, 204);
@@ -268,12 +260,10 @@ describe('misc', () => {
     assert.equal(reloaded.list('services').length, app.store.list('services').length);
     assert.equal(reloaded.list('services')[0].name, 'Zoom Video');
   });
-
   test('invalid JSON body is a 400', async () => {
     const res = await fetch(`${base}/api/posts`, { method: 'POST', headers, body: '{nope' });
     assert.equal(res.status, 400);
   });
-
   test('static pages and 404s', async () => {
     assert.equal((await fetch(`${base}/`)).status, 200);
     assert.equal((await fetch(`${base}/admin`)).status, 200);
@@ -281,33 +271,68 @@ describe('misc', () => {
     assert.equal((await fetch(`${base}/api/nope`)).status, 404);
     assert.equal((await fetch(`${base}/nope`)).status, 404);
   });
-
   test('providers are described for the admin form', async () => {
     const r = await call('GET', '/api/providers');
     const ids = r.json.map((p) => p.id);
     assert.deepEqual(ids, ['statuspage', 'slack', 'google', 'rss', 'http', 'manual']);
     assert.ok(r.json.every((p) => Array.isArray(p.fields) && !('check' in p)));
   });
-
   test('slack slash command verifies signatures and answers', async () => {
     const body = 'token=x&text=zoom&user_name=wayland';
     const ts = String(Math.floor(Date.now() / 1000));
     const sig = `v0=${crypto.createHmac('sha256', 'shh').update(`v0:${ts}:${body}`).digest('hex')}`;
     const ok = await fetch(`${base}/slack/command`, {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-slack-request-timestamp': ts, 'x-slack-signature': sig },
-      body,
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-slack-request-timestamp': ts, 'x-slack-signature': sig }, body,
     });
     assert.equal(ok.status, 200);
     const j = await ok.json();
     assert.equal(j.response_type, 'in_channel');
     assert.match(j.text, /Zoom Video — Partial outage/);
-
     const forged = await fetch(`${base}/slack/command`, {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-slack-request-timestamp': ts, 'x-slack-signature': 'v0=bad' },
-      body,
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-slack-request-timestamp': ts, 'x-slack-signature': 'v0=bad' }, body,
     });
     assert.equal(forged.status, 401);
+  });
+});
+
+describe('monitoring security and freshness', () => {
+  test('blocked checks cannot fabricate outages or publish a private endpoint', async () => {
+    const endpoint = 'http://169.254.169.254/latest/meta-data?secret=not-for-publication';
+    const dry = await call('POST', '/api/services/test', { name: 'Blocked', provider: 'http', config: { url: endpoint } });
+    assert.equal(dry.json.ok, false);
+    assert.ok(!dry.text.includes(endpoint));
+    const created = await call('POST', '/api/services', { name: 'Blocked', provider: 'http', config: { url: endpoint } });
+    try {
+      const ref = await call('POST', `/api/services/${created.json.id}/refresh`);
+      assert.equal(ref.json.status.state, 'unknown');
+      assert.equal(ref.json.status.errorCode, 'CHECK_POLICY');
+      assert.deepEqual(ref.json.status.incidents, []);
+      const publicStatus = await call('GET', '/api/status');
+      assert.ok(!publicStatus.text.includes(endpoint));
+      assert.ok(publicStatus.json.services.every((s) => !Object.hasOwn(s, 'config')));
+    } finally { await call('DELETE', `/api/services/${created.json.id}`); }
+  });
+  test('API and plain text expire observations even while the web server is healthy', async () => {
+    const service = app.store.list('services')[0];
+    const previous = app.poller.status(service.id);
+    app.poller.statuses.set(service.id, { ...previous, checkedAt: new Date(Date.now() - 12 * 3600e3).toISOString() });
+    try {
+      const snapshot = (await call('GET', '/api/status')).json;
+      assert.equal(snapshot.verdict.who, 'unknown');
+      assert.equal(snapshot.services[0].freshness, 'stale');
+      assert.equal(snapshot.services[0].lastKnown.state, previous.state);
+      assert.deepEqual(snapshot.incidents, []);
+      assert.match((await call('GET', '/api/status.txt?q=zoom')).text, /Stale data/);
+      assert.equal((await call('GET', '/healthz')).status, 200);
+    } finally { app.poller.statuses.set(service.id, previous); }
+  });
+  test('browser protections and no-store policy are present', async () => {
+    const res = await fetch(`${base}/api/status`);
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.match(res.headers.get('content-security-policy'), /script-src 'self'/);
   });
 });

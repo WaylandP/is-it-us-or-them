@@ -1,12 +1,10 @@
 # Contributing to Is It Us or Them?
 
-Thanks for helping build a dependable, open-source status tool for IT teams. We welcome bug fixes, accessible UX improvements, documentation updates and useful provider integrations.
+Thanks for helping build a dependable self-hosted status tool for IT teams. Bug fixes, accessible UX improvements, documentation and provider integrations are welcome.
 
-## Before you start
+## Setup
 
-Check [open issues](https://github.com/WaylandP/is-it-us-or-them/issues) for existing work. For substantial architecture changes or integrations requiring credentials, describe your proposed approach in an issue first. Never include credentials, private URLs, or organization-specific logs in public discussions.
-
-## Development setup
+Check open issues for related work. Discuss substantial architecture or authenticated-provider changes before implementing them. Never publish credentials, private URLs or organization-specific logs.
 
 Requires Node.js 20.10+ and npm:
 
@@ -17,61 +15,58 @@ npm ci
 ADMIN_TOKEN=local-development-only npm run dev
 ```
 
-Browse http://localhost:3000 and http://localhost:3000/admin. Use a strong token in any shared environment. No frontend build step is needed.
+This token is for isolated local development only. Public status is at http://localhost:3000 and admin at http://localhost:3000/admin. Direct Node startup reads environment variables, not .env automatically.
 
 ```bash
 npm test
 ```
 
-Tests use `node:test`. The local mock feed server in `test/helpers.js` serves fixtures from `test/fixtures/`; tests do not require live vendor APIs.
+Tests use node:test and local fixture servers, not live vendor APIs. test/helpers.js explicitly approves each fixture server's origin and loopback address; it does not disable production SSRF controls. Proxy variables must not be set for these tests. The disposable TLS fixtures are public test credentials only, as documented in test/fixtures/README.md.
 
-## Working on features
+## Working on changes
 
-1. Reproduce the problem or define the expected user-facing outcome.
-2. Check `src/verdict.js`, `src/snapshot.js`, `src/poller.js` and related code paths when changing status behavior.
-3. Keep changes focused and dependency-light; avoid unnecessary rewrites.
-4. Add or update automated tests, including unknown/error conditions.
-5. For UI changes, inspect public **and** admin pages in light/dark themes and at phone widths. Include before/after screenshots.
-6. Update README, deployment guidance or changelog for user-visible changes.
-7. Open a descriptive pull request using the template.
+1. Reproduce the problem or define the expected outcome.
+2. Inspect relevant code and tests. Status changes often span the poller, freshness, verdict, JSON snapshot, text/Slack renderer and browser.
+3. Preserve independent sources, timestamps and uncertainty. A failed monitor is not evidence of a vendor outage.
+4. Keep changes focused and dependency-light; add negative and boundary tests.
+5. For UI work, check public and admin pages, phone/desktop layouts, light/dark themes, keyboard access and disconnected states. Include screenshots for visual changes.
+6. Update docs and changelog for user-visible behavior or upgrade requirements.
+7. Open a descriptive PR and distinguish tests actually run from validation still pending.
 
 ## Adding a provider
 
-Add `src/providers/<provider>.js` exporting a descriptor:
+Add src/providers/<provider>.js with a descriptor:
 
 ```js
+import { fetchJson, result } from './util.js';
+
 export default {
   id: 'example',
   label: 'Example Status',
   description: 'Reads Example service health.',
-  defaultOwner: 'vendor', // or 'internal'
-  fields: [
-    { key: 'baseUrl', label: 'Status URL', type: 'url', required: true },
-  ],
+  defaultOwner: 'vendor',
+  fields: [{ key: 'baseUrl', label: 'Status URL', type: 'url', required: true }],
   async check(service, ctx) {
-    // ctx.now and ctx.timeoutMs are available.
-    // Return { state, summary, incidents, maintenances }.
+    const data = await fetchJson(service.config.baseUrl, { timeoutMs: ctx.timeoutMs });
+    // Validate the documented provider schema before interpreting it.
+    if (typeof data.healthy !== 'boolean') throw new Error('Unsupported status response');
+    return result({ state: data.healthy ? 'operational' : 'degraded' });
   },
 };
 ```
 
-Register the provider in `src/providers/index.js`. States must match `src/states.js`: `operational`, `maintenance`, `degraded`, `partial_outage`, `major_outage` or `unknown`.
+This is a contract example, not a real vendor integration. Register the adapter in src/providers/index.js, add sanitized fixtures and document setup. Supported normalized states are operational, maintenance, degraded, partial_outage, major_outage and unknown.
 
-Incident entries may include `id`, `title`, `status`, `impact`, `url`, `startedAt`, `updatedAt`, `latestUpdate` and `components`; maintenance entries may include `id`, `title`, `status`, `url`, `startsAt` and `endsAt`.
+Incident entries may include id, title, status, impact, url, startedAt, updatedAt, latestUpdate and components. Maintenance entries may include id, title, status, url, startsAt and endsAt. Throw safe, readable errors for invalid/unreadable feeds; do not report healthy after parsing failure or include credentials/private URLs in error text.
 
-Throw a readable error for unreadable feeds; the poller will surface an unknown state and retain last-known status. Do not silently report healthy after a failed fetch. Be cautious with feed heuristics, authentication, redirects and untrusted content.
+All provider traffic must use the shared helpers in util.js. Do not bypass network policy with global fetch, unchecked redirects, broad private-IP permissions or insecure certificate verification. See [Monitoring security](docs/MONITORING_SECURITY.md) for policy and limits.
 
-Add representative, **sanitized** fixtures and tests in `test/providers.test.js`. Document setup in README. Prefer native `fetch` and existing helpers over new runtime dependencies.
+## Review checklist
 
-## Pull request checklist
+- Focused solution with suitable unit/integration regressions.
+- Freshness, failure, invalid input and authentication cases considered.
+- API/deployment compatibility and migration documented.
+- UI behavior checked where changed; no fabricated verification claims.
+- npm test and relevant CI results reviewed.
 
-- [ ] The change solves the described issue without unrelated rewrites.
-- [ ] `npm test` passes locally or a reason is documented.
-- [ ] Negative/unknown states are tested where relevant.
-- [ ] Security and backward-compatibility impacts are considered.
-- [ ] Docs reflect the new behavior.
-- [ ] UI screenshots are included when applicable.
-
-CI tests Node 20, 22 and 24 and builds the Docker image. An open PR is not equivalent to an approved release.
-
-For private security reports, follow [SECURITY.md](SECURITY.md).
+CI tests Node 20, 22 and 24 and builds the Docker image. Passing CI is not a security audit or release approval. Report vulnerabilities according to [SECURITY.md](SECURITY.md).
